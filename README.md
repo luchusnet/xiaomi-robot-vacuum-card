@@ -40,9 +40,10 @@ May work on other Xiaomi MiOT vacuum models that expose room info via the `vacuu
 
 ### Via HACS (recommended)
 
-1. In HACS, go to **Frontend** → click the **+** button
-2. Search for **Xiaomi Robot Vacuum S20+ Card**
-3. Click **Download**
+1. In HACS, click the three-dot menu (⋮) → **Custom repositories**
+2. Enter `https://github.com/tojolab/xiaomi-s20plus-vacuum-card` and select category **Dashboard**
+3. Click **Add**
+4. Search for **Xiaomi Robot Vacuum S20+ Card** → **Download**
 
 After installation, add the card to your dashboard.
 
