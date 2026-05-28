@@ -1,6 +1,6 @@
-// xiaomi-s20plus-vacuum-card — v1.0.0
+// xiaomi-s20plus-vacuum-card — v1.0.1
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-
+const CARD_VERSION = '1.0.1';
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
     // List of common HA theme variables to forward
