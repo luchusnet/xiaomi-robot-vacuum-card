@@ -1,9 +1,32 @@
-
 // xiaomi-s20plus-vacuum-card — v1.0.0
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-const CARD_VERSION='1.0.0';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
+  _syncThemeVars() {
+    // List of common HA theme variables to forward
+    const vars = [
+      '--primary-color', '--accent-color', '--primary-background-color', '--secondary-background-color',
+      '--card-background-color', '--ha-card-background', '--ha-card-border-radius', '--ha-card-box-shadow',
+      '--ha-card-border-color', '--ha-chip-background', '--ha-chip-border-color', '--ha-edit-icon-hover-bg',
+      '--primary-text-color', '--secondary-text-color', '--disabled-text-color', '--divider-color', '--ha-divider-color',
+      '--state-active-background', '--state-active-border-color', '--state-active-shadow',
+      '--state-paused-background', '--state-paused-border-color', '--state-paused-shadow',
+      '--state-on-background', '--state-on-border-color', '--state-on-shadow',
+      '--state-error-background', '--state-error-border-color', '--state-error-shadow',
+      '--state-home-background', '--state-home-border-color', '--state-home-shadow',
+      '--state-paused-background-active', '--state-paused-border-color-active', '--state-paused-shadow-active',
+      '--state-on-background-active', '--state-on-border-color-active', '--state-on-shadow-active',
+      '--state-error-background-active', '--state-error-border-color-active', '--state-error-shadow-active',
+      '--state-home-background-active', '--state-home-border-color-active', '--state-home-shadow-active',
+      '--success-color', '--warning-color', '--error-color', '--text-on-primary-color',
+    ];
+    const root = document.documentElement;
+    const style = this.style;
+    vars.forEach(v => {
+      const val = getComputedStyle(root).getPropertyValue(v);
+      if (val) style.setProperty(v, val);
+    });
+  }
   constructor() {
     super();
     this.attachShadow({mode:'open'});
@@ -35,10 +58,12 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._optsSynced=false;
     this._rendered=false;
     this._sensorMode='unknown';
+    this._syncThemeVars();
     this.render();
   }
   set hass(h){
     this._hass=h;
+    this._syncThemeVars();
     if(!this._iconsLoaded){this._iconsLoaded=true;this._loadCustomIcons();}
     // Auto-discover helper entities via HA device registry (runs once per config change)
     if(!this._devResolved&&this._E.vc&&h.entities){
@@ -156,8 +181,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       w3:'M 8.6089838,23.531194 C 2.6875586,21.327244 0.2566252,15.277189 3.1624756,9.976077 4.4817597,7.5693097 9.5572552,1.530018 11.235673,0.36979759 c 1.055591,-0.72967325 1.065496,-0.72298935 4.863885,3.28326921 4.894427,5.1622255 6.182939,7.6686432 5.936004,11.5466492 -0.226228,3.552882 -1.783077,5.974233 -4.858937,7.557144 -2.498337,1.285696 -6.276397,1.627139 -8.5676412,0.774334 z m 7.2909992,-2.438103 c 2.084799,-0.94651 3.949211,-3.448067 4.33314,-5.813949 0.192049,-1.183484 -0.02452,-2.135115 -0.878138,-3.858519 C 17.823348,8.3283227 12.745726,2.3636388 11.915994,2.6820354 10.814223,3.1048136 6.0009357,9.0404616 4.9250236,11.303134 c -1.2363387,2.60008 -1.279758,3.777357 -0.2240972,6.076271 1.8848026,4.10452 6.7700846,5.724541 11.1990566,3.713686 z M 9.1685084,17.508482 C 9.299439,16.585106 9.518532,16.511366 12.13102,16.511366 c 2.531778,0 2.821125,0.08902 2.821125,0.868039 0,0.770644 -0.332376,0.882534 -2.962511,0.997116 -2.872839,0.125171 -2.9582366,0.09891 -2.8211256,-0.868039 z M 9.0928849,14.12426 c 0,-0.785358 0.2893476,-0.868039 3.0381351,-0.868039 2.748787,0 3.038135,0.08268 3.038135,0.868039 0,0.785358 -0.289348,0.868038 -3.038135,0.868038 -2.7487875,0 -3.0381351,-0.08268 -3.0381351,-0.868038 z M 9.4005872,11.683162 C 9.2313501,11.513938 9.0928849,11.008479 9.0928849,10.55992 c 0,-0.7301509 0.3066867,-0.8020679 2.9296301,-0.687183 2.597506,0.1137998 2.92963,0.226732 2.92963,0.996378 0,0.758232 -0.331634,0.884097 -2.621928,0.994903 -1.442059,0.06979 -2.7603926,-0.01172 -2.9296298,-0.180856 z',
     };
     if(key==='w0')return`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="${c}"><path d="M 9.0787806,21.456886 C 5.3881729,20.139861 3.2313399,17.113642 3.2313399,13.252452 c 0,-3.092553 1.3736914,-5.5692746 5.5067278,-9.9284576 3.4569913,-3.64617294 3.4662293,-3.65239785 4.4305003,-2.98585646 1.533291,1.05990036 6.169926,6.57699636 7.375137,8.77565916 3.283562,5.9901499 -1.097341,12.8739909 -8.193067,12.8739909 -0.981316,0 -2.4536502,-0.238886 -3.2718574,-0.530902 z m 6.8185944,-2.198663 c 1.857744,-0.947733 3.040088,-2.380335 3.653032,-4.42615 C 20.352941,12.153457 18.977033,9.2368997 14.643218,4.4302445 L 12.544728,2.1028014 10.366104,4.34262 c -2.7856519,2.8638957 -5.0513098,6.231415 -5.3833751,8.00147 -0.3127087,1.666849 0.6365587,4.429521 1.9261345,5.605633 2.4128671,2.200566 6.1682936,2.747248 8.9885116,1.3085 z"/><rect width="28.327147" height="2.5751948" x="-14.523537" y="16.042799" transform="rotate(-45)"/></svg>`;
-    if(!i[key])return'';
-    return`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="${c}"><path d="${i[key]}"/></svg>`;
+      if(!i[key])return'';
+      return`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="${c}"><path d="${i[key]}"/></svg>`;
   }
   _batteryIcon(pct){
     if(pct===null)return'mdi:battery-unknown';
@@ -273,9 +298,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._rendered=true;this._updateEditMode();
     if(!this._E.vc){
       this.shadowRoot.innerHTML=`<ha-card style="padding:20px;color:#ff6b6b;font-family:system-ui;font-size:14px;line-height:1.8;">
-        <b>xiaomi-s20plus-vacuum-card-v3</b><br><br>
-        Missing required config:<br>
-        &bull; <code>entity</code> — MiOT vacuum entity (xiaomi_miot)<br>
+      <b>xiaomi-s20plus-vacuum-card-v3</b><br><br>
+      Missing required config:<br>
+      &bull; <code>entity</code> — MiOT vacuum entity (xiaomi_miot)<br>
       </ha-card>`;
       return;
     }
@@ -301,92 +326,129 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const wOpts=(this._waterOpts||['Off','Level1','Level2','Level3']).map(v=>({value:v,...(_om[v]||{..._fb,label:v})}));
     this.shadowRoot.innerHTML=`<style>
     :host{display:block;font-family:'Figtree',system-ui,sans-serif;}
-    ha-card{background:linear-gradient(180deg,rgba(24,33,43,0.98),rgba(15,23,32,0.99));border:1px solid rgba(255,255,255,0.08);border-radius:24px;overflow:hidden;color:#f5f8fc;padding:14px;box-sizing:border-box;}
+    ha-card{
+      background: var(--ha-card-background, var(--card-background-color, #fff));
+      border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(0,0,0,0.12)));
+      border-radius: var(--ha-card-border-radius, 24px);
+      overflow: hidden;
+      color: var(--primary-text-color, #212121);
+      padding: 14px;
+      box-sizing: border-box;
+      box-shadow: var(--ha-card-box-shadow, none);
+    }
     .hdr{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin-bottom:12px;}
-    h1{font-size:20px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;text-align:center;margin:0;color:#f5f8fc;}
+    h1{font-size:20px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;text-align:center;margin:0;color:var(--primary-text-color, #212121);}
     .chip{padding:8px 13px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;border:1px solid;justify-self:end;}
     .bat{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;}
-    .bat-icon{--mdc-icon-size:20px;width:20px;height:20px;display:flex;filter:none;color:inherit;}
-    .ctrl-icon{--mdc-icon-size:24px;width:24px;height:24px;display:flex;filter:none;color:inherit;}
+    .bat-icon{--mdc-icon-size:20px;width:20px;height:20px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
+    .ctrl-icon{--mdc-icon-size:24px;width:24px;height:24px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
     .icon-label{display:flex;flex-direction:column;align-items:center;gap:5px;}
-    .icon-label span{font-size:11px;font-weight:600;letter-spacing:0.04em;opacity:0.85;}
+    .icon-label span{font-size:11px;font-weight:600;letter-spacing:0.04em;opacity:0.85;color:var(--primary-text-color, #fff);}
     .section{margin-top:10px;}
     .sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
-    .sec-hd h2{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:#6f7d8d;margin:0;}
+    .sec-hd h2{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--secondary-text-color, #6f7d8d);margin:0;}
     .pills{display:flex;gap:8px;}
-    .pill{padding:7px 14px;border-radius:999px;font-size:13px;font-weight:500;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#a7b3c2;cursor:pointer;font-family:inherit;transition:background 0.18s;}
+    .pill{
+      padding:7px 14px;
+      border-radius:999px;
+      font-size:13px;
+      font-weight:500;
+      background: var(--ha-chip-background, rgba(0,0,0,0.04));
+      border: 1px solid var(--ha-chip-border-color, var(--divider-color, rgba(0,0,0,0.08)));
+      color: var(--secondary-text-color, #a7b3c2);
+      cursor:pointer;font-family:inherit;transition:background 0.18s;
+    }
     .pill:hover{filter:brightness(0.92);}
     .rooms{display:grid;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:12px;}
-    .room{position:relative;min-height:72px;padding:10px 8px;border-radius:22px;background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.015));border:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;text-align:center;cursor:pointer;transition:all 0.18s;color:#a7b3c2;}
-    .room.active{background:linear-gradient(180deg,rgba(24,188,242,0.18),rgba(24,188,242,0.05));border-color:rgba(24,188,242,0.22);box-shadow:0 10px 28px rgba(24,188,242,0.12);color:#f5f8fc;}
-    .edit-icon{position:absolute;top:7px;right:7px;width:24px;height:24px;border-radius:8px;background:none;border:none;color:rgba(255,255,255,0.4);cursor:pointer;display:grid;place-items:center;opacity:0;pointer-events:none;transition:all 0.18s;padding:0;}
+    .room{
+      position:relative;min-height:72px;padding:10px 8px;border-radius:22px;
+      background: var(--ha-room-background, linear-gradient(180deg,rgba(0,0,0,0.03),rgba(0,0,0,0.015)));
+      border:1px solid var(--ha-room-border-color, var(--divider-color, rgba(0,0,0,0.06)));
+      display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;text-align:center;cursor:pointer;transition:all 0.18s;
+      color: var(--secondary-text-color, #a7b3c2);
+    }
+    .room.active{
+      background: var(--state-active-background, var(--primary-color, #03a9f4));
+      border-color: var(--state-active-border-color, var(--primary-color, #03a9f4));
+      box-shadow: 0 10px 28px var(--state-active-shadow, rgba(24,188,242,0.12));
+      color: var(--primary-text-color, #fff);
+    }
+    .edit-icon{position:absolute;top:7px;right:7px;width:24px;height:24px;border-radius:8px;background:none;border:none;color:var(--disabled-text-color, rgba(0,0,0,0.4));cursor:pointer;display:grid;place-items:center;opacity:0;pointer-events:none;transition:all 0.18s;padding:0;}
     :host(.ha-edit-mode) .room:hover .edit-icon{opacity:1;pointer-events:auto;}
-    .edit-icon:hover{background:rgba(255,255,255,0.1);color:#fff;}
+    .edit-icon:hover{background:var(--ha-edit-icon-hover-bg, rgba(0,0,0,0.1));color:var(--primary-text-color, #fff);}
     .ibox .ribox-icon{--mdc-icon-size:22px;width:22px;height:22px;display:flex;filter:brightness(0) invert(1) opacity(0.75);}
-    .room.active .ibox .ribox-icon{filter:brightness(0) invert(1);}
+    .room.active .ibox .ribox-icon,
+    .room.active ha-icon,
+    .opt.active ha-icon,
+    .opt.active .circle ha-icon,
+    .opt.active .circle svg,
+    .opt.active svg {
+      color: var(--primary-text-color, #212121);
+      fill: var(--primary-text-color, #212121);
+    }
     .icon-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.65);display:grid;place-items:center;z-index:999;}
-    .icon-modal{background:#18212b;border-radius:20px;padding:20px;width:min(340px,90vw);border:1px solid rgba(255,255,255,0.1);overflow:visible;}
-    .icon-modal h3{font-size:16px;font-weight:700;color:#f5f8fc;margin:0 0 4px;}
-    .icon-modal p{font-size:12px;color:#6f7d8d;margin:0 0 14px;}
+    .icon-modal{background:var(--ha-card-background, #18212b);border-radius:20px;padding:20px;width:min(340px,90vw);border:1px solid var(--ha-card-border-color, rgba(255,255,255,0.1));overflow:visible;}
+    .icon-modal h3{font-size:16px;font-weight:700;color:var(--primary-text-color, #f5f8fc);margin:0 0 4px;}
+    .icon-modal p{font-size:12px;color:var(--secondary-text-color, #6f7d8d);margin:0 0 14px;}
     ha-icon-picker{display:block;width:100%;}
     .modal-footer{margin-top:14px;display:flex;justify-content:flex-end;}
-    .reset-btn{padding:8px 16px;border-radius:999px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#a7b3c2;font-size:13px;cursor:pointer;font-family:inherit;}
-    .reset-btn:hover{filter:brightness(0.92);color:#f5f8fc;}
-    .ibox{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,0.05);color:#d4dce7;flex-shrink:0;transition:all 0.18s;}
-    .room.active .ibox{background:radial-gradient(circle at 30% 20%,#46d1ff,#18bcf2);border-color:transparent;box-shadow:0 8px 20px rgba(24,188,242,0.35);color:#fff;}
+    .reset-btn{padding:8px 16px;border-radius:999px;background:var(--ha-chip-background, rgba(0,0,0,0.05));border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.1));color:var(--secondary-text-color, #a7b3c2);font-size:13px;cursor:pointer;font-family:inherit;}
+    .reset-btn:hover{filter:brightness(0.92);color:var(--primary-text-color, #f5f8fc);}
+    .ibox{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.05));color:var(--primary-text-color, #d4dce7);flex-shrink:0;transition:all 0.18s;}
+    .room.active .ibox{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 8px 20px var(--state-active-shadow, rgba(24,188,242,0.35));color:var(--primary-text-color, #fff);}
     .rname{font-size:15px;font-weight:600;line-height:1.2;}
-    .sh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,0.06);}
-    .sh strong{font-size:17px;color:#f5f8fc;}
-    .sh em{font-style:normal;color:#a7b3c2;font-size:14px;}
+    .sh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--ha-divider-color, rgba(0,0,0,0.06));}
+    .sh strong{font-size:17px;color:var(--primary-text-color, #f5f8fc);}
+    .sh em{font-style:normal;color:var(--secondary-text-color, #a7b3c2);font-size:14px;}
     .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
-    .opt{display:grid;justify-items:center;gap:5px;text-align:center;cursor:pointer;background:none;border:none;color:#a7b3c2;font-family:inherit;padding:2px 0;transition:color 0.18s;font-size:12px;}
-    .opt.active{color:#bdf2ff;font-weight:700;}
-    .circle{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.04);transition:all 0.18s;}
-    .opt.active .circle{background:radial-gradient(circle at 30% 20%,#46d1ff,#18bcf2);border-color:transparent;box-shadow:0 12px 28px rgba(24,188,242,0.28);}
-    ha-icon{--mdc-icon-size:27px;width:27px;height:27px;display:flex;filter:brightness(0) invert(1);}
+    .opt{display:grid;justify-items:center;gap:5px;text-align:center;cursor:pointer;background:none;border:none;color:var(--secondary-text-color, #a7b3c2);font-family:inherit;padding:2px 0;transition:color 0.18s;font-size:12px;}
+    .opt.active{color:var(--primary-color, #03a9f4);font-weight:700;}
+    .circle{width:50px;height:50px;border-radius:50%;display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.04));transition:all 0.18s;}
+    .opt.active .circle{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 12px 28px var(--state-active-shadow, rgba(24,188,242,0.28));}
+    ha-icon{--mdc-icon-size:27px;width:27px;height:27px;display:flex;color:var(--primary-text-color, #212121);filter:none;}
     .actions{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
     .actions-top{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
-    .btn{min-height:46px;border-radius:18px;border:1px solid rgba(255,255,255,0.08);display:grid;place-items:center;background:rgba(255,255,255,0.04);color:#f5f8fc;cursor:pointer;font-family:inherit;transition:all 0.18s;}
+    .btn{min-height:46px;border-radius:18px;border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.08));display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));color:var(--primary-text-color, #f5f8fc);cursor:pointer;font-family:inherit;transition:all 0.18s;}
     .btn:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px);}
     .btn:active:not(:disabled){transform:scale(0.93)!important;filter:brightness(0.75)!important;transition:all 0.06s;}
     .btn:disabled{opacity:0.4;cursor:not-allowed;}
     @keyframes btn-confirm{0%{filter:brightness(2)}100%{filter:brightness(1)}}
     .btn-confirm{animation:btn-confirm 0.4s ease-out;}
-    .start-btn{display:flex;justify-content:center;gap:10px;background:linear-gradient(180deg,rgba(24,188,242,0.38),rgba(24,188,242,0.2));border-color:rgba(24,188,242,0.25);color:#effcff;font-weight:700;font-size:15px;font-family:inherit;}
-    .pause-btn{background:rgba(255,182,72,0.1);color:#ffb648;border-color:rgba(255,182,72,0.15);}
-    .resume-btn{background:rgba(67,209,124,0.1);color:#43d17c;border-color:rgba(67,209,124,0.15);}
-    .stop-btn{background:rgba(255,107,107,0.1);color:#ff6b6b;border-color:rgba(255,107,107,0.15);}
-    .home-btn{background:rgba(24,188,242,0.08);color:#8bdcff;border-color:rgba(24,188,242,0.12);}
-    .pause-btn.btn-last{background:rgba(255,182,72,0.32);border-color:rgba(255,182,72,0.55);box-shadow:0 0 12px rgba(255,182,72,0.2);}
-    .resume-btn.btn-last{background:rgba(67,209,124,0.32);border-color:rgba(67,209,124,0.55);box-shadow:0 0 12px rgba(67,209,124,0.2);}
-    .stop-btn.btn-last{background:rgba(255,107,107,0.32);border-color:rgba(255,107,107,0.55);box-shadow:0 0 12px rgba(255,107,107,0.2);}
-    .home-btn.btn-last{background:rgba(24,188,242,0.2);border-color:rgba(24,188,242,0.45);box-shadow:0 0 12px rgba(24,188,242,0.15);}
-    .nr{color:#6f7d8d;font-size:14px;padding:20px 0;text-align:center;}
+    .start-btn{display:flex;justify-content:center;gap:10px;background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:var(--state-active-border-color, var(--primary-color, #03a9f4));color:var(--text-on-primary-color, #fff);font-weight:700;font-size:15px;font-family:inherit;}
+    .pause-btn{background:var(--state-paused-background, var(--warning-color, #fff3cd));color:var(--warning-color, #ffb648);border-color:var(--state-paused-border-color, var(--warning-color, #ffb648));}
+    .resume-btn{background:var(--state-on-background, var(--success-color, #d4edda));color:var(--success-color, #43d17c);border-color:var(--state-on-border-color, var(--success-color, #43d17c));}
+    .stop-btn{background:var(--state-error-background, var(--error-color, #f8d7da));color:var(--error-color, #ff6b6b);border-color:var(--state-error-border-color, var(--error-color, #ff6b6b));}
+    .home-btn{background:var(--state-home-background, var(--primary-color, #03a9f4));color:var(--primary-color, #8bdcff);border-color:var(--state-home-border-color, var(--primary-color, #8bdcff));}
+    .pause-btn.btn-last{background:var(--state-paused-background-active, rgba(255,182,72,0.32));border-color:var(--state-paused-border-color-active, rgba(255,182,72,0.55));box-shadow:0 0 12px var(--state-paused-shadow, rgba(255,182,72,0.2));}
+    .resume-btn.btn-last{background:var(--state-on-background-active, rgba(67,209,124,0.32));border-color:var(--state-on-border-color-active, rgba(67,209,124,0.55));box-shadow:0 0 12px var(--state-on-shadow, rgba(67,209,124,0.2));}
+    .stop-btn.btn-last{background:var(--state-error-background-active, rgba(255,107,107,0.32));border-color:var(--state-error-border-color-active, rgba(255,107,107,0.55));box-shadow:0 0 12px var(--state-error-shadow, rgba(255,107,107,0.2));}
+    .home-btn.btn-last{background:var(--state-home-background-active, rgba(24,188,242,0.2));border-color:var(--state-home-border-color-active, rgba(24,188,242,0.45));box-shadow:0 0 12px var(--state-home-shadow, rgba(24,188,242,0.15));}
+    .nr{color:var(--secondary-text-color, #6f7d8d);font-size:14px;padding:20px 0;text-align:center;}
     @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     .spin{display:inline-flex;animation:spin 0.8s linear infinite;}
     </style>
     <ha-card>
-      <div class="hdr">
-        ${this._config.show_battery!==false&&this._battery!==null?`<div class="bat" style="color:${bc};"><ha-icon class="bat-icon" icon="${this._batteryIcon(this._battery)}"></ha-icon>&nbsp;${batLabel}</div>`:`<div></div>`}
-        <h1>${title}</h1>
-        ${(()=>{const sl=this._stateLabel();return this._config.show_status!==false&&sl?`<div class="chip" style="color:${sc};border-color:${sc}25;background:${sc}14;">${sl}</div>`:`<div></div>`;})()}
-      </div>
-      <div class="section" style="margin-top:0">
-        <div class="sec-hd"><h2>Rooms</h2><div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div></div>
-        ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${r.name}</div></div>`).join('')}</div>`}
-      </div>
-      ${this._E.mode?this._optSec('mode','Mode',mOpts):''}
-      ${this._E.fan?this._optSec('fan','Suction',fOpts):''}
-      ${this._E.water?this._optSec('water','Water output',wOpts):''}
-      <div class="actions">
-        <div class="actions-top">
-          <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}" id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
-          <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}" id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
-          <button class="btn stop-btn${this._lastAction==='stop'?' btn-last':''}" id="cs" title="Stop"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:stop"></ha-icon><span>Stop</span></div></button>
-          <button class="btn home-btn${this._lastAction==='home'?' btn-last':''}" id="ch" title="Return home"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon><span>Home</span></div></button>
-        </div>
-        <button class="btn start-btn"${btnDisabled?' disabled':''}>${btnLabel}</button>
-      </div>
+    <div class="hdr">
+    ${this._config.show_battery!==false&&this._battery!==null?`<div class="bat" style="color:${bc};"><ha-icon class="bat-icon" icon="${this._batteryIcon(this._battery)}"></ha-icon>&nbsp;${batLabel}</div>`:`<div></div>`}
+    <h1>${title}</h1>
+    ${(()=>{const sl=this._stateLabel();return this._config.show_status!==false&&sl?`<div class="chip" style="color:${sc};border-color:${sc}25;background:${sc}14;">${sl}</div>`:`<div></div>`;})()}
+    </div>
+    <div class="section" style="margin-top:0">
+    <div class="sec-hd"><h2>Rooms</h2><div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div></div>
+    ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${r.name}</div></div>`).join('')}</div>`}
+    </div>
+    ${this._E.mode?this._optSec('mode','Mode',mOpts):''}
+    ${this._E.fan?this._optSec('fan','Suction',fOpts):''}
+    ${this._E.water?this._optSec('water','Water output',wOpts):''}
+    <div class="actions">
+    <div class="actions-top">
+    <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}" id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
+    <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}" id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
+    <button class="btn stop-btn${this._lastAction==='stop'?' btn-last':''}" id="cs" title="Stop"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:stop"></ha-icon><span>Stop</span></div></button>
+    <button class="btn home-btn${this._lastAction==='home'?' btn-last':''}" id="ch" title="Return home"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon><span>Home</span></div></button>
+    </div>
+    <button class="btn start-btn"${btnDisabled?' disabled':''}>${btnLabel}</button>
+    </div>
     </ha-card>`;
     this.shadowRoot.querySelectorAll('.room').forEach(el=>el.addEventListener('click',()=>this.toggleRoom(el.dataset.id)));
     this.shadowRoot.querySelectorAll('.edit-icon').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();this._showIconPicker(b.dataset.id,this._rooms.find(r=>r.id===b.dataset.id)?.name||'');}));
@@ -441,20 +503,20 @@ class XiaomiS20PlusVacuumCardV3Editor extends HTMLElement {
     const btnAuto=btnBase+(isCustom?'background:transparent;color:#a7b3c2;':'background:#18bcf2;color:#fff;');
     const btnCustom=btnBase+(!isCustom?'background:transparent;color:#a7b3c2;':'background:#18bcf2;color:#fff;');
     this.innerHTML=`<div style="display:flex;flex-direction:column;gap:14px;padding:4px 0">
-      <div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-          <span style="font-size:14px;color:#f5f8fc;font-weight:500;">Title</span>
-          <div style="display:flex;border:1px solid rgba(255,255,255,0.15);border-radius:8px;overflow:hidden;">
-            <button id="btn-auto" style="${btnAuto}">Auto</button>
-            <button id="btn-custom" style="${btnCustom}">Custom</button>
-          </div>
-        </div>
-        ${isCustom
-          ?`<input id="title-input" type="text" placeholder="e.g. My Vacuum" style="display:block;width:100%;box-sizing:border-box;padding:12px 16px;font-size:14px;font-family:inherit;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:#f5f8fc;outline:none;" />`
-          :`<div style="font-size:12px;color:#a7b3c2;padding:2px 2px;">Uses the vacuum's friendly name from Home Assistant.</div>`
-        }
-      </div>
-      <ha-form id="config-form"></ha-form>
+    <div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+    <span style="font-size:14px;color:#f5f8fc;font-weight:500;">Title</span>
+    <div style="display:flex;border:1px solid rgba(255,255,255,0.15);border-radius:8px;overflow:hidden;">
+    <button id="btn-auto" style="${btnAuto}">Auto</button>
+    <button id="btn-custom" style="${btnCustom}">Custom</button>
+    </div>
+    </div>
+    ${isCustom
+      ?`<input id="title-input" type="text" placeholder="e.g. My Vacuum" style="display:block;width:100%;box-sizing:border-box;padding:12px 16px;font-size:14px;font-family:inherit;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);border-radius:8px;color:#f5f8fc;outline:none;" />`
+      :`<div style="font-size:12px;color:#a7b3c2;padding:2px 2px;">Uses the vacuum's friendly name from Home Assistant.</div>`
+    }
+    </div>
+    <ha-form id="config-form"></ha-form>
     </div>`;
     this.querySelector('#btn-auto').addEventListener('click',()=>this._switchMode('auto'));
     this.querySelector('#btn-custom').addEventListener('click',()=>this._switchMode('custom'));
