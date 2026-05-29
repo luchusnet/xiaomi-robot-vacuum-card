@@ -1,9 +1,9 @@
-// xiaomi-s20plus-vacuum-card — v1.0.1
+// xiaomi-s20plus-vacuum-card — v1.0.2
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-const CARD_VERSION = '1.0.1';
+const CARD_VERSION = '1.0.2';
+
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
-    // List of common HA theme variables to forward
     const vars = [
       '--primary-color', '--accent-color', '--primary-background-color', '--secondary-background-color',
       '--card-background-color', '--ha-card-background', '--ha-card-border-radius', '--ha-card-box-shadow',
@@ -17,7 +17,6 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       '--state-paused-background-active', '--state-paused-border-color-active', '--state-paused-shadow-active',
       '--state-on-background-active', '--state-on-border-color-active', '--state-on-shadow-active',
       '--state-error-background-active', '--state-error-border-color-active', '--state-error-shadow-active',
-      '--state-home-background-active', '--state-home-border-color-active', '--state-home-shadow-active',
       '--success-color', '--warning-color', '--error-color', '--text-on-primary-color',
     ];
     const root = document.documentElement;
@@ -65,7 +64,6 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._hass=h;
     this._syncThemeVars();
     if(!this._iconsLoaded){this._iconsLoaded=true;this._loadCustomIcons();}
-    // Auto-discover helper entities via HA device registry (runs once per config change)
     if(!this._devResolved&&this._E.vc&&h.entities){
       const did=h.entities[this._E.vc]?.device_id;
       if(did){
@@ -105,7 +103,6 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const newAvc=(vs1&&vs1.state!=='unavailable')?this._E.vc:(this._E.vc_alt||this._E.vc);
     if(newAvc!==this._activeVc){this._activeVc=newAvc;changed=true;}
     const bs=this._E.bat?h.states[this._E.bat]:null;
-    // Status sensor: explicit config wins; otherwise auto-discover by finding sensor.*_status with vacuum.status attribute
     let ss=this._E.status?h.states[this._E.status]:null;
     if(!ss){for(const[id,st]of Object.entries(h.states)){if(id.startsWith('sensor.')&&id.endsWith('_status')&&st.attributes?.['vacuum.status']!==undefined){ss=st;break;}}}
     const nb=vs?.attributes?.battery_level??(bs?parseFloat(bs.state):null);
@@ -210,9 +207,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _stateColor(){
     const vs=this._optimisticState||this._vacuumState;
     const sensorColorMap={
-      // xiaomi_miot values
       sweeping:'#43d17c',mapping:'#43d17c','go charging':'#ffb648',charging:'#18bcf2',charged:'#18bcf2',paused:'#ffb648',idle:'#18bcf2',
-      // xiaomi_home values
       working:'#43d17c',returning:'#ffb648',pausing:'#ffb648',standby:'#18bcf2','fully charged':'#18bcf2',
     };
     if(this._cleaningLocked&&vs==='paused')return'#ffb648';
@@ -298,7 +293,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._rendered=true;this._updateEditMode();
     if(!this._E.vc){
       this.shadowRoot.innerHTML=`<ha-card style="padding:20px;color:#ff6b6b;font-family:system-ui;font-size:14px;line-height:1.8;">
-      <b>xiaomi-s20plus-vacuum-card-v3</b><br><br>
+      <b>xiaomi-s20plus-vacuum-card</b><br><br>
       Missing required config:<br>
       &bull; <code>entity</code> — MiOT vacuum entity (xiaomi_miot)<br>
       </ha-card>`;
@@ -376,7 +371,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .edit-icon{position:absolute;top:7px;right:7px;width:24px;height:24px;border-radius:8px;background:none;border:none;color:var(--disabled-text-color, rgba(0,0,0,0.4));cursor:pointer;display:grid;place-items:center;opacity:0;pointer-events:none;transition:all 0.18s;padding:0;}
     :host(.ha-edit-mode) .room:hover .edit-icon{opacity:1;pointer-events:auto;}
     .edit-icon:hover{background:var(--ha-edit-icon-hover-bg, rgba(0,0,0,0.1));color:var(--primary-text-color, #fff);}
-    .ibox .ribox-icon{--mdc-icon-size:22px;width:22px;height:22px;display:flex;filter:brightness(0) invert(1) opacity(0.75);}
+    .ibox .ribox-icon{--mdc-icon-size:22px;width:22px;height:22px;display:flex;color:inherit;}
     .room.active .ibox .ribox-icon,
     .room.active ha-icon,
     .opt.active ha-icon,
@@ -385,6 +380,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .opt.active svg {
       color: var(--primary-text-color, #212121);
       fill: var(--primary-text-color, #212121);
+      filter: none;
     }
     .icon-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.65);display:grid;place-items:center;z-index:999;}
     .icon-modal{background:var(--ha-card-background, #18212b);border-radius:20px;padding:20px;width:min(340px,90vw);border:1px solid var(--ha-card-border-color, rgba(255,255,255,0.1));overflow:visible;}
@@ -394,7 +390,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .modal-footer{margin-top:14px;display:flex;justify-content:flex-end;}
     .reset-btn{padding:8px 16px;border-radius:999px;background:var(--ha-chip-background, rgba(0,0,0,0.05));border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.1));color:var(--secondary-text-color, #a7b3c2);font-size:13px;cursor:pointer;font-family:inherit;}
     .reset-btn:hover{filter:brightness(0.92);color:var(--primary-text-color, #f5f8fc);}
-    .ibox{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.05));color:var(--primary-text-color, #d4dce7);flex-shrink:0;transition:all 0.18s;}
+    .ibox{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.05));color:inherit;flex-shrink:0;transition:all 0.18s;}
     .room.active .ibox{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 8px 20px var(--state-active-shadow, rgba(24,188,242,0.35));color:var(--primary-text-color, #fff);}
     .rname{font-size:15px;font-weight:600;line-height:1.2;}
     .sh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--ha-divider-color, rgba(0,0,0,0.06));}
@@ -414,7 +410,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .btn:disabled{opacity:0.4;cursor:not-allowed;}
     @keyframes btn-confirm{0%{filter:brightness(2)}100%{filter:brightness(1)}}
     .btn-confirm{animation:btn-confirm 0.4s ease-out;}
-    .start-btn{display:flex;justify-content:center;gap:10px;background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:var(--state-active-border-color, var(--primary-color, #03a9f4));color:var(--text-on-primary-color, #fff);font-weight:700;font-size:15px;font-family:inherit;}
+    .start-btn{display:flex;justify-content:center;gap:10px;background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:var(--state-active-border-color, var(--primary-color, #03a9f4));color:var(--primary-text-color, #fff);font-weight:700;font-size:15px;font-family:inherit;}
     .pause-btn{background:var(--state-paused-background, var(--warning-color, #fff3cd));color:var(--warning-color, #ffb648);border-color:var(--state-paused-border-color, var(--warning-color, #ffb648));}
     .resume-btn{background:var(--state-on-background, var(--success-color, #d4edda));color:var(--success-color, #43d17c);border-color:var(--state-on-border-color, var(--success-color, #43d17c));}
     .stop-btn{background:var(--state-error-background, var(--error-color, #f8d7da));color:var(--error-color, #ff6b6b);border-color:var(--state-error-border-color, var(--error-color, #ff6b6b));}
@@ -542,7 +538,13 @@ class XiaomiS20PlusVacuumCardV3Editor extends HTMLElement {
     });
   }
 }
-customElements.define('xiaomi-s20plus-vacuum-card-editor',XiaomiS20PlusVacuumCardV3Editor);
-customElements.define('xiaomi-s20plus-vacuum-card',XiaomiS20PlusVacuumCardV3);
+if(!customElements.get('xiaomi-s20plus-vacuum-card-editor')){
+  customElements.define('xiaomi-s20plus-vacuum-card-editor',XiaomiS20PlusVacuumCardV3Editor);
+}
+if(!customElements.get('xiaomi-s20plus-vacuum-card')){
+  customElements.define('xiaomi-s20plus-vacuum-card',XiaomiS20PlusVacuumCardV3);
+}
 window.customCards=window.customCards||[];
-window.customCards.push({type:'xiaomi-s20plus-vacuum-card',name:'Xiaomi Robot Vacuum S20+ Card',description:'Room-by-room control card for Xiaomi S20+ via xiaomi_miot integration.',version:CARD_VERSION,preview:true});
+if(!window.customCards.find(c=>c.type==='xiaomi-s20plus-vacuum-card')){
+  window.customCards.push({type:'xiaomi-s20plus-vacuum-card',name:'Xiaomi Robot Vacuum S20+ Card',description:'Room-by-room control card for Xiaomi S20+ via xiaomi_miot integration.',version:CARD_VERSION,preview:true});
+}
