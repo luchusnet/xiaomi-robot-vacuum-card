@@ -8,13 +8,13 @@ A custom Lovelace card for Home Assistant that gives you full room-by-room contr
 
 ## Features
 
-- **Room selection** — tap individual rooms or use All / Clear; rooms are read directly from the vacuum's room map
-- **Mode control** — Vacuuming, Mopping, Vacuuming & Mopping, Vacuuming before mopping
-- **Suction level** — Silent, Standard, Strong, Turbo
-- **Water output** — Off, Level 1, Level 2, Level 3
-- **Visual editor** — configure via the HA card editor, no YAML required
-- **Auto entity discovery** — finds mode/suction/water select entities automatically via device registry; no manual entity IDs needed
-- **LAN & Cloud mode support** — works in both Cloud mode and LAN mode; note that in LAN mode without internet, battery percentage and status chip are unavailable (all cleaning commands still work)
+- **Room selection** - tap individual rooms or use All / Clear; rooms are read directly from the vacuum's room map
+- **Mode control** - Vacuuming, Mopping, Vacuuming & Mopping, Vacuuming before mopping
+- **Suction level** - Silent, Standard, Strong, Turbo
+- **Water output** - Off, Level 1, Level 2, Level 3
+- **Visual editor** - configure via the HA card editor, no YAML required
+- **Auto entity discovery** - finds mode/suction/water select entities automatically via device registry; no manual entity IDs needed
+- **LAN & Cloud mode support** - works in both Cloud mode and LAN mode; note that in LAN mode without internet, battery percentage and status chip are unavailable (all cleaning commands still work)
 
 ---
 
@@ -77,10 +77,10 @@ The card auto-discovers all helper entities (mode, suction, water selects) from 
 
 - Only works with the `xiaomi_miot` integration
 - Room names in the card come from your vacuum's built-in room map (set up via the Mi Home app); they must match what the integration exposes
-- Tested on Xiaomi S20+ (B108GL) only — other models may or may not work
+- Tested on Xiaomi S20+ (B108GL) only. Other models may or may not work
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT  see [LICENSE](LICENSE)
