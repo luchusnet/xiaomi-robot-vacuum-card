@@ -80,7 +80,11 @@ The card auto-discovers all helper entities (mode, suction, water selects) from 
 - Tested on Xiaomi S20+ (B108GL) only. Other models may or may not work
 
 ---
+## Troubleshooting
 
+### Rooms not showing up?
+   #### Rooms are only pulled if they have been renamed in the Xiaomi Home app. Default names (Room 1, Room 2...) are not returned by the API.
+---
 ## License
 
 MIT  see [LICENSE](LICENSE)
