@@ -266,6 +266,13 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this.shadowRoot.querySelectorAll(`.opt[data-type="${type}"]`).forEach(b=>b.classList.toggle('active',b.dataset.value===value));
     const el=this.shadowRoot.querySelector(`.sv[data-type="${type}"]`);
     if(el)el.textContent=this._optLabel(value);
+    if(type==='mode'){
+      const mi=this._modeInt();
+      const fs=this.shadowRoot.querySelector('[data-section="fan"]');
+      const ws=this.shadowRoot.querySelector('[data-section="water"]');
+      if(fs)fs.classList.toggle('disabled',mi===2);
+      if(ws)ws.classList.toggle('disabled',mi===1);
+    }
   }
   _optLabel(v){return({
     'Sweep':'Vacuuming','Mop':'Mopping','Sweep Mop':'Vac & Mop','Sweep Before Mopping':'Vac before Mop',
@@ -310,7 +317,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   }
   _optSec(type,label,opts,disabled=false){
     const cv=type==='mode'?this._cleanMode:type==='fan'?this._fanLevel:this._waterLevel;
-    return`<div class="section${disabled?' disabled':''}"><div class="sh"><strong>${label}</strong><em class="sv" data-type="${type}">${this._optLabel(cv)}</em></div><div class="opts">${opts.map(o=>`<button class="opt${o.value===cv?' active':''}" data-type="${type}" data-value="${o.value}"><div class="circle">${this._cicon(o.icon)}</div><div>${o.label}</div></button>`).join('')}</div></div>`;
+    return`<div class="section${disabled?' disabled':''}" data-section="${type}"><div class="sh"><strong>${label}</strong><em class="sv" data-type="${type}">${this._optLabel(cv)}</em></div><div class="opts">${opts.map(o=>`<button class="opt${o.value===cv?' active':''}" data-type="${type}" data-value="${o.value}"><div class="circle">${this._cicon(o.icon)}</div><div>${o.label}</div></button>`).join('')}</div></div>`;
   }
   render(){
     this._rendered=true;this._updateEditMode();
@@ -357,6 +364,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .hdr{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:14px;margin-bottom:12px;}
     h1{font-size:20px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;text-align:center;margin:0;color:var(--primary-text-color, #212121);}
     .chip{padding:8px 13px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;border:1px solid;justify-self:end;}
+    .warn-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
+    .warn-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.35);color:#ff5050;}
     .bat{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;}
     .bat-icon{--mdc-icon-size:20px;width:20px;height:20px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
     .ctrl-icon{--mdc-icon-size:24px;width:24px;height:24px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
@@ -453,6 +462,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     <h1>${title}</h1>
     ${(()=>{const sl=this._stateLabel();return this._config.show_status!==false&&sl?`<div class="chip" style="color:${sc};border-color:${sc}25;background:${sc}14;">${sl}</div>`:`<div></div>`;})()}
     </div>
+    ${(()=>{const _a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _we=_a['vacuum.water_tank_status']===1;const _sf=_a['vacuum.sewage_tank_status']===1;if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
     <div class="section" style="margin-top:0">
     <div class="sec-hd"><h2>Rooms</h2><div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div></div>
     ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${r.name.length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${r.name}</div></div>`).join('')}</div>`}
