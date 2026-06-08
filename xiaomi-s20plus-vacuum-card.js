@@ -36,7 +36,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._modeOpts=null;this._fanOpts=null;this._waterOpts=null;this._activeVc='';
     this._optimisticState=null;this._lastAction=null;
     this._sensorMode='unknown';this._detectionStartedAt=0;this._staleDetectedAt=0;
-    this._customIcons={};this._iconsLoaded=false;
+    this._customIcons={};this._customNames={};this._iconsLoaded=false;
     this._E={vc:'',vc_alt:null,bat:null,status:null,mode:null,fan:null,water:null};
   }
   _modeInt(){return{'Sweep':1,'Mop':2,'Sweep Mop':3,'Sweep Before Mopping':4,'Vacuuming':1,'Mopping':2,'Vacuuming & Mopping':3,'Vacuuming before mopping':4}[this._cleanMode]||1;}
@@ -236,22 +236,51 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _updateEditMode(){this.classList.toggle('ha-edit-mode',this._isEditMode());}
   connectedCallback(){this._onUrlChange=()=>this._updateEditMode();window.addEventListener('popstate',this._onUrlChange);window.addEventListener('location-changed',this._onUrlChange);}
   disconnectedCallback(){window.removeEventListener('popstate',this._onUrlChange);window.removeEventListener('location-changed',this._onUrlChange);}
-  async _loadCustomIcons(){try{const res=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-s20plus-v3-icons'});this._customIcons=res?.value||{};}catch(e){this._customIcons={};}this.render();}
+  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-s20plus-v3-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-s20plus-v3-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};}this.render();}
   _saveIcon(id,icon){this._customIcons[id]=icon;this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-icons',value:this._customIcons});this.render();}
-  _clearIcon(id){delete this._customIcons[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-icons',value:this._customIcons});this.render();}
+  _clearIcon(id){delete this._customIcons[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-icons',value:this._customIcons});this.render();}  _saveName(id,name){if(name.trim())this._customNames[id]=name.trim();else delete this._customNames[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-names',value:this._customNames});this.render();}
   _roomIconHtml(r){const c=this._customIcons[r.id];return`<ha-icon class="ribox-icon" icon="${c||r.icon}"></ha-icon>`;}
   _showIconPicker(id,name){
-    const current=this._customIcons[id]||'';
+    const curIcon=this._customIcons[id]||'';
+    const curName=this._customNames[id]||name;
     const modal=document.createElement('div');
     modal.className='icon-modal-bg';
-    modal.innerHTML=`<div class="icon-modal"><h3>Choose icon</h3><p>${name}</p><ha-icon-picker></ha-icon-picker><div class="modal-footer"><button class="reset-btn">Reset to default</button></div></div>`;
+    modal.innerHTML=`<div class="icon-modal">
+      <h3>Edit room</h3>
+      <p style="font-size:12px;color:var(--secondary-text-color,#6f7d8d);margin:0 0 14px;">${name}</p>
+      <label style="display:block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--secondary-text-color,#6f7d8d);margin-bottom:6px;">Display name</label>
+      <div style="display:flex;gap:8px;margin-bottom:14px;">
+        <input id="rni" type="text" value="${curName}" placeholder="${name}"
+          style="flex:1;padding:10px 12px;font-size:14px;font-family:inherit;
+          background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.18);
+          border-radius:8px;color:var(--primary-text-color,#f5f8fc);outline:none;box-sizing:border-box;"/>
+        <button id="save-name-btn" style="padding:10px 16px;border-radius:8px;border:none;
+          background:var(--primary-color,#03a9f4);color:#fff;font-weight:700;font-size:13px;
+          font-family:inherit;cursor:pointer;white-space:nowrap;">Save</button>
+      </div>
+      <label style="display:block;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--secondary-text-color,#6f7d8d);margin-bottom:6px;">Icon</label>
+      <ha-icon-picker></ha-icon-picker>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="reset-btn" id="reset-name-btn">Reset name</button>
+        <button class="reset-btn" id="reset-icon-btn">Reset icon</button>
+      </div>
+    </div>`;
     this.shadowRoot.appendChild(modal);
     const picker=modal.querySelector('ha-icon-picker');
-    picker.value=current;
+    picker.value=curIcon;
     picker.hass=this._hass;
-    picker.addEventListener('value-changed',e=>{if(e.detail.value){this._saveIcon(id,e.detail.value);this._hideIconPicker();}});
+    // Close on background click
     modal.addEventListener('click',e=>{if(e.target===modal)this._hideIconPicker();});
-    modal.querySelector('.reset-btn').addEventListener('click',()=>{this._clearIcon(id);this._hideIconPicker();});
+    // Icon selection saves and closes
+    picker.addEventListener('value-changed',e=>{if(e.detail.value){this._saveIcon(id,e.detail.value);this._hideIconPicker();}});
+    // Name: Save button or Enter key
+    const ni=modal.querySelector('#rni');
+    const saveName=()=>{this._saveName(id,ni.value);this._hideIconPicker();};
+    modal.querySelector('#save-name-btn').addEventListener('click',saveName);
+    ni.addEventListener('keydown',e=>{if(e.key==='Enter')saveName();});
+    // Reset buttons
+    modal.querySelector('#reset-name-btn').addEventListener('click',()=>{this._saveName(id,'');this._hideIconPicker();});
+    modal.querySelector('#reset-icon-btn').addEventListener('click',()=>{this._clearIcon(id);this._hideIconPicker();});
   }
   _hideIconPicker(){const m=this.shadowRoot.querySelector('.icon-modal-bg');if(m)m.remove();}
   toggleRoom(id){this._selectedRooms=this._selectedRooms.includes(id)?this._selectedRooms.filter(r=>r!==id):[...this._selectedRooms,id];this._updR();this._updS();}
@@ -372,6 +401,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .icon-label{display:flex;flex-direction:column;align-items:center;gap:5px;}
     .icon-label span{font-size:11px;font-weight:600;letter-spacing:0.04em;opacity:0.85;color:var(--primary-text-color, #fff);}
     .section{margin-top:10px;} .section.disabled{opacity:0.35;pointer-events:none;transition:opacity 0.2s;}
+    .consumables{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;}
+    .cons-chip{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
     .sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
     .sec-hd h2{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--secondary-text-color, #6f7d8d);margin:0;}
     .pills{display:flex;gap:8px;}
@@ -465,12 +496,13 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     ${(()=>{const _a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _we=_a['vacuum.water_tank_status']===1;const _sf=_a['vacuum.sewage_tank_status']===1;if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
     <div class="section" style="margin-top:0">
     <div class="sec-hd"><h2>Rooms</h2><div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div></div>
-    ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${r.name.length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${r.name}</div></div>`).join('')}</div>`}
+    ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div>`}
     </div>
     ${this._E.mode?this._optSec('mode','Mode',mOpts):''}
     ${this._E.fan?this._optSec('fan','Suction',fOpts,this._modeInt()===2):''}
     ${this._E.water?this._optSec('water','Water output',wOpts,this._modeInt()===1):''}
     <div class="actions">
+    ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:mop",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
     <div class="actions-top">
     <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}" id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
     <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}" id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
