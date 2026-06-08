@@ -287,7 +287,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   selectAll(){this._selectedRooms=this._rooms.map(r=>r.id);this._updR();this._updS();}
   selectNone(){this._selectedRooms=[];this._updR();this._updS();}
   _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
-  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;b.disabled=this._cleaningLocked||this._selectedRooms.length===0;b.innerHTML=this._cleaningLocked?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
+  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ic=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';b.disabled=_ic||this._selectedRooms.length===0;b.innerHTML=_ic?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
   _setOpt(type,value){
     if(type==='mode')this._cleanMode=value;
     else if(type==='fan')this._fanLevel=value;
@@ -322,8 +322,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
     const roomIds=this._selectedRooms.map(Number);
     if(this._config.camera_entity||this._config.map_source?.camera_entity){
-      // xiaomi_cloud_map_extractor: use vacuum.send_command with app_segment_clean
-      await this._hass.callService('vacuum','send_command',{entity_id:avc,command:'app_segment_clean',params:[{segments:roomIds,repeat:1}]});
+      // xiaomi_cloud_map_extractor path: use MiOT action siid=2,aiid=16 (Start Vacuum Room Sweep)
+      // params: piid=15 (Vacuum Room IDs) = JSON array string e.g. "[10,17]"
+      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:16,params:['['+roomIds.join(',')+']']});
     } else {
       // xiaomi_miot S20+ native: configure each room then start
       for(const id of roomIds){
@@ -365,8 +366,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const half=rawName.slice(0,rawName.length/2);
     const dedupedName=rawName===half+' '+half||rawName===half+half?half.trim():rawName;
     const title=this._config.title_mode==='custom'&&this._config.title?this._config.title:dedupedName;
-    const btnDisabled=this._cleaningLocked||this._running||this._selectedRooms.length===0;
-    const btnLabel=this._cleaningLocked?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
+    const _isCleaning=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';
+    const btnDisabled=_isCleaning||this._running||this._selectedRooms.length===0;
+    const btnLabel=_isCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
     const _om={
       'Sweep':{icon:'vac',label:'Vacuuming'},'Mop':{icon:'mop',label:'Mopping'},'Sweep Mop':{icon:'vacmop',label:'Vac & Mop'},'Sweep Before Mopping':{icon:'vacbmop',label:'Vac before Mop'},
       'Vacuuming':{icon:'vac',label:'Vacuuming'},'Mopping':{icon:'mop',label:'Mopping'},'Vacuuming & Mopping':{icon:'vacmop',label:'Vac & Mop'},'Vacuuming before mopping':{icon:'vacbmop',label:'Vac before Mop'},
@@ -503,12 +505,12 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     ${this._E.water?this._optSec('water','Water output',wOpts,this._modeInt()===1):''}
     <div class="actions">
     ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:mop",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
-    <div class="actions-top">
-    <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}" id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
-    <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}" id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
-    <button class="btn stop-btn${this._lastAction==='stop'?' btn-last':''}" id="cs" title="Stop"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:stop"></ha-icon><span>Stop</span></div></button>
-    <button class="btn home-btn${this._lastAction==='home'?' btn-last':''}" id="ch" title="Return home"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon><span>Home</span></div></button>
-    </div>
+    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _cl=_vs==='cleaning'||_lk;const _pa=_vs==='paused';const _re=_vs==='returning';const _er=_vs==='error';const _id=_vs==='idle';const canPause=_cl;const canResume=_pa;const canStop=_cl||_pa||_re||_er;const canHome=_cl||_pa||_id||_er;const _d=v=>v?'':' disabled';return`<div class="actions-top">
+    <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}"${_d(canPause)} id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
+    <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}"${_d(canResume)} id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
+    <button class="btn stop-btn${this._lastAction==='stop'?' btn-last':''}"${_d(canStop)} id="cs" title="Stop"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:stop"></ha-icon><span>Stop</span></div></button>
+    <button class="btn home-btn${this._lastAction==='home'?' btn-last':''}"${_d(canHome)} id="ch" title="Return home"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon><span>Home</span></div></button>
+    </div>`;})()}
     <button class="btn start-btn"${btnDisabled?' disabled':''}>${btnLabel}</button>
     </div>
     </ha-card>`;
