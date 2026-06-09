@@ -1,6 +1,6 @@
-// xiaomi-s20plus-vacuum-card — v1.1.1
+// xiaomi-s20plus-vacuum-card — v1.1.2
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-const CARD_VERSION = '1.1.1';
+const CARD_VERSION = '1.1.2';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -151,7 +151,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       }
       if(elapsed>90*60*1000){this._cleaningLocked=false;}
     }
-    if(wasLocked&&!this._cleaningLocked)this._lastAction=null;
+    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];}
     if(nvs!==this._vacuumState){this._vacuumState=nvs;this._optimisticState=null;changed=true;}
     if(!this._cleaningLocked&&rawStatus!==this._rawStatus){this._rawStatus=rawStatus;changed=true;}
     if(nb!==this._battery){this._battery=nb;changed=true;}
