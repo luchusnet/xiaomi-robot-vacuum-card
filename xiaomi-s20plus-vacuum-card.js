@@ -1,6 +1,6 @@
-// xiaomi-s20plus-vacuum-card — v1.1.0
+// xiaomi-s20plus-vacuum-card — v1.1.1
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-const CARD_VERSION = '1.1.0';
+const CARD_VERSION = '1.1.1';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -134,8 +134,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       }
       if(JSON.stringify(nr)!==JSON.stringify(this._rooms)){this._rooms=nr;changed=true;}
     }
-    const cleaningStatuses=new Set(['sweeping','mapping','working','cleaning','pausing','returning']);
+    const cleaningStatuses=new Set(['sweeping','mapping','working','cleaning','pausing','returning','gowash','multitaskstationworking','stationworking','washbreak']);
     const doneStatuses=new Set(['charging','charged','fully charged']);
+    const stationWorkingStatuses=new Set(['multitaskstationworking','stationworking','multitaskrecharge','washbreak','gowash']);
     if(this._cleaningLocked&&this._sensorMode==='detecting'){
       if(cleaningStatuses.has(rawStatus)){this._sensorMode='live';}
       else if(Date.now()-this._detectionStartedAt>90000){this._sensorMode='stale';this._staleDetectedAt=Date.now();}
@@ -144,7 +145,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     if(this._cleaningLocked){
       const elapsed=Date.now()-this._cleaningLockedAt;
       if(this._sensorMode!=='stale'){
-        if(elapsed>30000&&(doneStatuses.has(rawStatus)||nvs==='docked')){this._cleaningLocked=false;}
+        if(elapsed>30000&&(doneStatuses.has(rawStatus)||(nvs==='docked'&&!stationWorkingStatuses.has(rawStatus)))){this._cleaningLocked=false;}
       }else{
         if(Date.now()-this._staleDetectedAt>30*60*1000){this._cleaningLocked=false;}
       }
@@ -215,8 +216,11 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _stateLabel(){
     const vs=this._optimisticState||this._vacuumState;
     if(this._cleaningLocked&&vs==='paused')return'Paused';
+    const stationLabels={'multitaskstationworking':'Station working','stationworking':'Station working','multitaskrecharge':'Returning to charge','washbreak':'Washing mop','gowash':'Going to wash'};
+    if(this._cleaningLocked&&stationLabels[this._rawStatus])return stationLabels[this._rawStatus];
     if(this._cleaningLocked)return'Working';
     if(this._sensorMode==='stale')return'';
+    if(stationLabels[this._rawStatus])return stationLabels[this._rawStatus];
     const show=new Set(['charging','charged','fully charged']);
     if(show.has(this._rawStatus))return this._capitalize(this._rawStatus);
     return'';
@@ -226,6 +230,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const sensorColorMap={
       sweeping:'#43d17c',mapping:'#43d17c','go charging':'#ffb648',charging:'#18bcf2',charged:'#18bcf2',paused:'#ffb648',idle:'#18bcf2',
       working:'#43d17c',returning:'#ffb648',pausing:'#ffb648',standby:'#18bcf2','fully charged':'#18bcf2',
+      multitaskstationworking:'#18bcf2',stationworking:'#18bcf2',multitaskrecharge:'#ffb648',washbreak:'#18bcf2',gowash:'#ffb648',
     };
     if(this._cleaningLocked&&vs==='paused')return'#ffb648';
     if(this._cleaningLocked)return'#43d17c';
