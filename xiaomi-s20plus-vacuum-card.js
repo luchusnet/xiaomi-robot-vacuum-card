@@ -1,6 +1,6 @@
-// xiaomi-s20plus-vacuum-card — v1.1.8
+// xiaomi-s20plus-vacuum-card — v1.1.9
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-const CARD_VERSION = '1.1.8';
+const CARD_VERSION = '1.1.9';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -402,7 +402,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     h1{font-size:20px;font-weight:700;line-height:1.1;letter-spacing:-0.02em;text-align:center;margin:0;color:var(--primary-text-color, #212121);}
     .chip{padding:8px 13px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;border:1px solid;justify-self:end;}
     .warn-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;}
-    .warn-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.35);color:#ff5050;}
+    .warn-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;font-size:12px;font-weight:600;background:rgba(255,80,80,0.12);border:1px solid rgba(255,80,80,0.35);color:#ff5050;animation:warn-pulse 1.4s ease-in-out infinite;}
+    @keyframes warn-pulse{0%,100%{opacity:1;background:rgba(255,80,80,0.12);}50%{opacity:0.55;background:rgba(255,80,80,0.28);}}
     .bat{display:flex;align-items:center;gap:6px;font-size:15px;font-weight:700;}
     .bat-icon{--mdc-icon-size:20px;width:20px;height:20px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
     .ctrl-icon{--mdc-icon-size:24px;width:24px;height:24px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
