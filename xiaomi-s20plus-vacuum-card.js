@@ -1,6 +1,6 @@
-// xiaomi-s20plus-vacuum-card — v1.1.5
+// xiaomi-s20plus-vacuum-card — v1.1.6
 // MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
-const CARD_VERSION = '1.1.5';
+const CARD_VERSION = '1.1.6';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -501,7 +501,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     <h1>${title}</h1>
     ${(()=>{const sl=this._stateLabel();return this._config.show_status!==false&&sl?`<div class="chip" style="color:${sc};border-color:${sc}25;background:${sc}14;">${sl}</div>`:`<div></div>`;})()}
     </div>
-    ${(()=>{const _a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _we=(_a['vacuum.water_tank_status']>0)||(_a['vacuum.host_water_tank_status']>0);const _sf=_a['vacuum.sewage_tank_status']>0;if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
+    ${(()=>{const _a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let _ud={};try{_ud=JSON.parse(_a['custom.updata_difference']||'{}');}catch(e){}const _df=_ud.differ||[];const _we=(_a['vacuum.water_tank_status']>0)||(_a['vacuum.host_water_tank_status']>0)||(_df.find(d=>d.type===1)?.status>0);const _sf=(_a['vacuum.sewage_tank_status']>0)||(_df.find(d=>d.type===2)?.status>0);if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
     <div class="section${_isCleaning?' disabled':''}" style="margin-top:0">
     <div class="sec-hd"><h2>Rooms</h2><div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div></div>
     ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div>`}
