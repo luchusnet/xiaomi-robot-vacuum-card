@@ -5,8 +5,8 @@ HA_HOST="192.168.1.90"
 HA_PORT="8123"
 HA_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI5ZjI5ZWIzZTg4ZjY0ZjJhYWI0OTZhMjljMmVkNTk2MyIsImlhdCI6MTc4MDg0ODAyMywiZXhwIjoyMDk2MjA4MDIzfQ.rBrHFOoVb8FWj_bdhaGU2RBnsVlJ0MgjlS_GUZxU0gU"
 HA_SSH_PASS="claudepassssh433191"
-JS_FILE="xiaomi-s20plus-vacuum-card.js"
-HA_PATH="/homeassistant/www/community/xiaomi-s20plus-vacuum-card/$JS_FILE"
+JS_FILE="xiaomi-robot-vacuum-card.js"
+HA_PATH="/homeassistant/www/community/xiaomi-robot-vacuum-card/$JS_FILE"
 
 echo "→ Deploying $JS_FILE..."
 

@@ -1,4 +1,4 @@
-# Xiaomi Robot Vacuum S20+ Card
+# Xiaomi Robot Vacuum Card
 
 A custom Lovelace card for Home Assistant that gives you full room-by-room control of your Xiaomi Robot Vacuum using the [xiaomi_miot](https://github.com/al-one/hass-xiaomi-miot) integration — with extended support for the **Xiaomi Robot Vacuum 5 Pro** (OV21GL) via [xiaomi_cloud_map_extractor](https://github.com/PiotrMachowski/Home-Assistant-custom-components-Xiaomi-Cloud-Map-Extractor).
 
@@ -49,18 +49,18 @@ Other Xiaomi MiOT vacuum models may work with either path depending on which att
 ### Via HACS (recommended)
 
 1. In HACS, click the three-dot menu (⋮) → **Custom repositories**
-2. Enter `https://github.com/tojolab/xiaomi-s20plus-vacuum-card` and select category **Dashboard**
+2. Enter `https://github.com/luchusnet/xiaomi-robot-vacuum-card` and select category **Dashboard**
 3. Click **Add**
-4. Search for **Xiaomi Robot Vacuum S20+ Card** → **Download**
+4. Search for **Xiaomi Robot Vacuum Card** → **Download**
 
 After installation, add the card to your dashboard.
 
 ### Manual
 
-1. Download `xiaomi-s20plus-vacuum-card.js` from the [latest release](https://github.com/tojolab/xiaomi-s20plus-vacuum-card/releases/latest)
-2. Copy it to `/config/www/xiaomi-s20plus-vacuum-card.js` on your HA server
+1. Download `xiaomi-robot-vacuum-card.js` from the [latest release](https://github.com/luchusnet/xiaomi-robot-vacuum-card/releases/latest)
+2. Copy it to `/config/www/xiaomi-robot-vacuum-card.js` on your HA server
 3. In HA → Settings → Dashboards → Resources, add:
-   - URL: `/local/xiaomi-s20plus-vacuum-card.js`
+   - URL: `/local/xiaomi-robot-vacuum-card.js`
    - Type: JavaScript module
 4. Hard-refresh your browser (Ctrl+Shift+R)
 
@@ -73,7 +73,7 @@ After installation, add the card to your dashboard.
 ### Minimal — Xiaomi S20+ (xiaomi_miot only)
 
 ```yaml
-type: custom:xiaomi-s20plus-vacuum-card
+type: custom:xiaomi-robot-vacuum-card
 entity: vacuum.your_vacuum_entity
 ```
 
@@ -82,7 +82,7 @@ The card auto-discovers all helper entities (mode, suction, water selects) from 
 ### Full config — Xiaomi Robot Vacuum 5 Pro (xiaomi_cloud_map_extractor)
 
 ```yaml
-type: custom:xiaomi-s20plus-vacuum-card
+type: custom:xiaomi-robot-vacuum-card
 entity: vacuum.your_vacuum_entity
 map_source:
   camera_entity: camera.your_vacuum_live_map   # from xiaomi_cloud_map_extractor

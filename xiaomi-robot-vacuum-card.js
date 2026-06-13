@@ -1,5 +1,5 @@
-// xiaomi-s20plus-vacuum-card — v1.2.0
-// MIT License — https://github.com/tojolab/xiaomi-s20plus-vacuum-card
+// xiaomi-robot-vacuum-card — v1.2.0
+// MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
 const CARD_VERSION = '1.2.0';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -152,7 +152,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       }
       if(elapsed>90*60*1000){this._cleaningLocked=false;}
     }
-    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-cleaning-state',value:null});}
+    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
     if(nvs!==this._vacuumState){this._vacuumState=nvs;this._optimisticState=null;changed=true;}
     if(!this._cleaningLocked&&rawStatus!==this._rawStatus){this._rawStatus=rawStatus;changed=true;}
     if(nb!==this._battery){this._battery=nb;changed=true;}
@@ -242,9 +242,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _updateEditMode(){this.classList.toggle('ha-edit-mode',this._isEditMode());}
   connectedCallback(){this._onUrlChange=()=>this._updateEditMode();window.addEventListener('popstate',this._onUrlChange);window.addEventListener('location-changed',this._onUrlChange);}
   disconnectedCallback(){window.removeEventListener('popstate',this._onUrlChange);window.removeEventListener('location-changed',this._onUrlChange);}
-  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-s20plus-v3-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-s20plus-v3-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};} try{const cs=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-s20plus-v3-cleaning-state'});const st=cs?.value;if(st&&Array.isArray(st.rooms)&&st.lockedAt&&(Date.now()-st.lockedAt<90*60*1000)){this._selectedRooms=st.rooms;if(!this._cleaningLocked){this._cleaningLocked=true;this._cleaningLockedAt=st.lockedAt;this._sensorMode='detecting';this._detectionStartedAt=st.lockedAt;}}}catch(e){}this.render();}
-  _saveIcon(id,icon){this._customIcons[id]=icon;this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-icons',value:this._customIcons});this.render();}
-  _clearIcon(id){delete this._customIcons[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-icons',value:this._customIcons});this.render();}  _saveName(id,name){if(name.trim())this._customNames[id]=name.trim();else delete this._customNames[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-names',value:this._customNames});this.render();}
+  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};} try{const cs=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state'});const st=cs?.value;if(st&&Array.isArray(st.rooms)&&st.lockedAt&&(Date.now()-st.lockedAt<90*60*1000)){this._selectedRooms=st.rooms;if(!this._cleaningLocked){this._cleaningLocked=true;this._cleaningLockedAt=st.lockedAt;this._sensorMode='detecting';this._detectionStartedAt=st.lockedAt;}}}catch(e){}this.render();}
+  _saveIcon(id,icon){this._customIcons[id]=icon;this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-icons',value:this._customIcons});this.render();}
+  _clearIcon(id){delete this._customIcons[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-icons',value:this._customIcons});this.render();}  _saveName(id,name){if(name.trim())this._customNames[id]=name.trim();else delete this._customNames[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-names',value:this._customNames});this.render();}
   _roomIconHtml(r){const c=this._customIcons[r.id];return`<ha-icon class="ribox-icon" icon="${c||r.icon}"></ha-icon>`;}
   _showIconPicker(id,name){
     const curIcon=this._customIcons[id]||'';
@@ -349,7 +349,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._sensorMode='detecting';
     this._detectionStartedAt=Date.now();
     this._rawStatus='working';
-    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-s20plus-v3-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
+    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
     this.render();
   }
   _optSec(type,label,opts,disabled=false){
@@ -360,7 +360,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._rendered=true;this._updateEditMode();
     if(!this._E.vc){
       this.shadowRoot.innerHTML=`<ha-card style="padding:20px;color:#ff6b6b;font-family:system-ui;font-size:14px;line-height:1.8;">
-      <b>xiaomi-s20plus-vacuum-card</b><br><br>
+      <b>xiaomi-robot-vacuum-card</b><br><br>
       Missing required config:<br>
       &bull; <code>entity</code> — MiOT vacuum entity (xiaomi_miot)<br>
       </ha-card>`;
@@ -535,7 +535,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this.shadowRoot.querySelector('#ch').addEventListener('click',()=>{this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState='returning';this.render();_flash('#ch');setTimeout(()=>{if(this._lastAction==='home'){this._lastAction=null;this.render();}},3000);});
   }
   getCardSize(){return 8;}
-  static getConfigElement(){return document.createElement('xiaomi-s20plus-vacuum-card-editor');}
+  static getConfigElement(){return document.createElement('xiaomi-robot-vacuum-card-editor');}
   static getStubConfig(){
     return{entity:'vacuum.your_vacuum_robot_cleaner'};
   }
@@ -610,13 +610,13 @@ class XiaomiS20PlusVacuumCardV3Editor extends HTMLElement {
     });
   }
 }
-if(!customElements.get('xiaomi-s20plus-vacuum-card-editor')){
-  customElements.define('xiaomi-s20plus-vacuum-card-editor',XiaomiS20PlusVacuumCardV3Editor);
+if(!customElements.get('xiaomi-robot-vacuum-card-editor')){
+  customElements.define('xiaomi-robot-vacuum-card-editor',XiaomiS20PlusVacuumCardV3Editor);
 }
-if(!customElements.get('xiaomi-s20plus-vacuum-card')){
-  customElements.define('xiaomi-s20plus-vacuum-card',XiaomiS20PlusVacuumCardV3);
+if(!customElements.get('xiaomi-robot-vacuum-card')){
+  customElements.define('xiaomi-robot-vacuum-card',XiaomiS20PlusVacuumCardV3);
 }
 window.customCards=window.customCards||[];
-if(!window.customCards.find(c=>c.type==='xiaomi-s20plus-vacuum-card')){
-  window.customCards.push({type:'xiaomi-s20plus-vacuum-card',name:'Xiaomi Robot Vacuum S20+ Card',description:'Room-by-room control card for Xiaomi S20+ via xiaomi_miot integration.',version:CARD_VERSION,preview:true});
+if(!window.customCards.find(c=>c.type==='xiaomi-robot-vacuum-card')){
+  window.customCards.push({type:'xiaomi-robot-vacuum-card',name:'Xiaomi Robot Vacuum S20+ Card',description:'Room-by-room control card for Xiaomi S20+ via xiaomi_miot integration.',version:CARD_VERSION,preview:true});
 }
