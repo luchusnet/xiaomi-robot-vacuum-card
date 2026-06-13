@@ -147,7 +147,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       if(this._sensorMode!=='stale'){
         if(elapsed>30000&&(doneStatuses.has(rawStatus)||(nvs==='docked'&&!stationWorkingStatuses.has(rawStatus)))){this._cleaningLocked=false;}
       }else{
-        if(Date.now()-this._staleDetectedAt>30*60*1000){this._cleaningLocked=false;}
+        if(doneStatuses.has(rawStatus)||(nvs==='docked'&&!stationWorkingStatuses.has(rawStatus))){this._cleaningLocked=false;}
+        else if(Date.now()-this._staleDetectedAt>30*60*1000){this._cleaningLocked=false;}
       }
       if(elapsed>90*60*1000){this._cleaningLocked=false;}
     }
