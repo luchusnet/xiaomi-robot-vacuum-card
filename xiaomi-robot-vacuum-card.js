@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.2.0
+// xiaomi-robot-vacuum-card — v1.3.0
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.2.0';
+const CARD_VERSION = '1.3.0';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -36,6 +36,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._modeOpts=null;this._fanOpts=null;this._waterOpts=null;this._activeVc='';
     this._optimisticState=null;this._lastAction=null;
     this._sensorMode='unknown';this._detectionStartedAt=0;this._staleDetectedAt=0;
+    this._cleaningModeTab='rooms';this._selectedZones=[];this._zoneDrawing=null;this._mapZoom=1;this._mapPan={x:0,y:0};
     this._customIcons={};this._customNames={};this._iconsLoaded=false;
     this._E={vc:'',vc_alt:null,bat:null,status:null,mode:null,fan:null,water:null};
   }
@@ -152,7 +153,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       }
       if(elapsed>90*60*1000){this._cleaningLocked=false;}
     }
-    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
+    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
     if(nvs!==this._vacuumState){this._vacuumState=nvs;this._optimisticState=null;changed=true;}
     if(!this._cleaningLocked&&rawStatus!==this._rawStatus){this._rawStatus=rawStatus;changed=true;}
     if(nb!==this._battery){this._battery=nb;changed=true;}
@@ -293,7 +294,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   selectAll(){this._selectedRooms=this._rooms.map(r=>r.id);this._updR();this._updS();}
   selectNone(){this._selectedRooms=[];this._updR();this._updS();}
   _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
-  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ic=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';b.disabled=_ic||this._selectedRooms.length===0;b.innerHTML=_ic?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
+  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ic=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;const _tab=_camId?this._cleaningModeTab:'rooms';const _none=_tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;b.disabled=_ic||_none;b.innerHTML=_ic?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
   _setOpt(type,value){
     if(type==='mode')this._cleanMode=value;
     else if(type==='fan')this._fanLevel=value;
@@ -352,6 +353,101 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
     this.render();
   }
+  _getCalibPts(){const camId=this._config.camera_entity||this._config.map_source?.camera_entity;if(!camId||!this._hass)return null;return this._hass.states[camId]?.attributes?.calibration_points||null;}
+  _computeAffine(pts){
+    if(!pts||pts.length<2)return null;
+    let p=pts.slice(0,3);
+    if(p.length===2){const dx=p[1].map.x-p[0].map.x,dy=p[1].map.y-p[0].map.y,dvx=p[1].vacuum.x-p[0].vacuum.x,dvy=p[1].vacuum.y-p[0].vacuum.y;p=[...p,{map:{x:p[0].map.x-dy,y:p[0].map.y+dx},vacuum:{x:p[0].vacuum.x-dvy,y:p[0].vacuum.y+dvx}}];}
+    const[p0,p1,p2]=p;
+    const[x1,y1,x2,y2,x3,y3]=[p0.map.x,p0.map.y,p1.map.x,p1.map.y,p2.map.x,p2.map.y];
+    const[vx1,vy1,vx2,vy2,vx3,vy3]=[p0.vacuum.x,p0.vacuum.y,p1.vacuum.x,p1.vacuum.y,p2.vacuum.x,p2.vacuum.y];
+    const det=x1*(y2-y3)+x2*(y3-y1)+x3*(y1-y2);
+    if(Math.abs(det)<1e-10)return null;
+    const a=(vx1*(y2-y3)+vx2*(y3-y1)+vx3*(y1-y2))/det,b=(x1*(vx2-vx3)+x2*(vx3-vx1)+x3*(vx1-vx2))/det,cc=(x1*(y2*vx3-y3*vx2)+x2*(y3*vx1-y1*vx3)+x3*(y1*vx2-y2*vx1))/det;
+    const d=(vy1*(y2-y3)+vy2*(y3-y1)+vy3*(y1-y2))/det,e=(x1*(vy2-vy3)+x2*(vy3-vy1)+x3*(vy1-vy2))/det,f=(x1*(y2*vy3-y3*vy2)+x2*(y3*vy1-y1*vy3)+x3*(y1*vy2-y2*vy1))/det;
+    return{a,b,c:cc,d,e,f};
+  }
+  _mapPxToVac(px,py,T){return{x:Math.round(T.a*px+T.b*py+T.c),y:Math.round(T.d*px+T.e*py+T.f)};}
+  async startZoneCleaning(){
+    if(this._selectedZones.length===0||this._running||this._vacuumState==='cleaning'||this._vacuumState==='returning')return;
+    this._running=true;
+    const E=this._E;const avc=this._activeVc||E.vc;
+    const btn=this.shadowRoot.querySelector('.start-btn');
+    if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
+    if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
+    if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
+    if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
+    const zones=this._selectedZones.map(z=>[Math.min(z.vac.x1,z.vac.x2),Math.min(z.vac.y1,z.vac.y2),Math.max(z.vac.x1,z.vac.x2),Math.max(z.vac.y1,z.vac.y2)]);
+    await this._hass.callService('vacuum','send_command',{entity_id:avc,command:'app_zoned_clean',params:{zones,repeats:1}});
+    this._running=false;
+    this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
+    this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
+    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:[],lockedAt:this._cleaningLockedAt}});
+    this.render();
+  }
+  _removeZone(id){this._selectedZones=this._selectedZones.filter(z=>z.id!==id);const c=this.shadowRoot.querySelector('#zone-canvas');if(c)this._redrawZones(c);this._updZoneList();}
+  _updZoneList(){
+    const zl=this.shadowRoot.querySelector('.zone-list');if(!zl)return;
+    if(this._selectedZones.length===0){zl.innerHTML='<div class="nr" style="padding:8px 0;font-size:12px;">Draw a rectangle on the map to add a zone</div>';}
+    else{zl.innerHTML=this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('');zl.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));}
+    this._updS();
+  }
+  _redrawZones(canvas){
+    const ctx=canvas.getContext('2d');ctx.clearRect(0,0,canvas.width,canvas.height);
+    const fs=Math.max(12,Math.min(canvas.width,canvas.height)*0.05);
+    this._selectedZones.forEach((z,i)=>{
+      const{x1,y1,x2,y2}=z.px;
+      ctx.fillStyle='rgba(3,169,244,0.18)';ctx.strokeStyle='rgba(3,169,244,0.9)';ctx.lineWidth=Math.max(1,canvas.width*0.003);
+      ctx.beginPath();ctx.rect(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1));ctx.fill();ctx.stroke();
+      ctx.fillStyle='rgba(3,169,244,0.95)';ctx.font=`bold ${fs}px system-ui`;ctx.fillText(i+1,Math.min(x1,x2)+4,Math.min(y1,y2)+fs+2);
+    });
+    if(this._zoneDrawing){
+      const{x1,y1,x2,y2}=this._zoneDrawing;
+      ctx.strokeStyle='rgba(255,255,255,0.8)';ctx.lineWidth=1;ctx.setLineDash([6,3]);
+      ctx.strokeRect(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1));ctx.setLineDash([]);
+    }
+  }
+  _updateMapTransform(){const inner=this.shadowRoot.querySelector('#zone-inner');if(inner)inner.style.transform=`translate(${this._mapPan.x}px,${this._mapPan.y}px) scale(${this._mapZoom})`;}
+  _zoomMap(d){this._mapZoom=Math.max(1,Math.min(5,Math.round((this._mapZoom+d)*10)/10));if(this._mapZoom===1)this._mapPan={x:0,y:0};this._updateMapTransform();}
+  _setupZoneCanvas(){
+    const canvas=this.shadowRoot.querySelector('#zone-canvas');const img=this.shadowRoot.querySelector('#zone-img');if(!canvas||!img)return;
+    const calibPts=this._getCalibPts();const affine=calibPts?this._computeAffine(calibPts):null;
+    const setup=()=>{canvas.width=img.naturalWidth||img.clientWidth||400;canvas.height=img.naturalHeight||img.clientHeight||400;this._redrawZones(canvas);};
+    if(img.complete&&img.naturalWidth>0)setup();else img.addEventListener('load',setup,{once:true});
+    const getPos=e=>{const rect=canvas.getBoundingClientRect();const t=e.touches?e.touches[0]:(e.changedTouches?e.changedTouches[0]:e);return{x:(t.clientX-rect.left)*canvas.width/rect.width,y:(t.clientY-rect.top)*canvas.height/rect.height};};
+    const _finishZone=()=>{
+      if(!this._zoneDrawing)return;
+      const{x1,y1,x2,y2}=this._zoneDrawing;
+      if(Math.abs(x2-x1)>20&&Math.abs(y2-y1)>20){
+        const zone={id:Date.now(),px:{x1,y1,x2,y2}};
+        if(affine){const v1=this._mapPxToVac(x1,y1,affine),v2=this._mapPxToVac(x2,y2,affine);zone.vac={x1:v1.x,y1:v1.y,x2:v2.x,y2:v2.y};}
+        else{zone.vac={x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2)};}
+        this._selectedZones=[...this._selectedZones,zone];
+      }
+      this._zoneDrawing=null;this._redrawZones(canvas);this._updZoneList();
+    };
+    canvas.addEventListener('mousedown',e=>{e.preventDefault();const p=getPos(e);this._zoneDrawing={x1:p.x,y1:p.y,x2:p.x,y2:p.y};});
+    canvas.addEventListener('mousemove',e=>{if(!this._zoneDrawing)return;const p=getPos(e);this._zoneDrawing.x2=p.x;this._zoneDrawing.y2=p.y;this._redrawZones(canvas);});
+    canvas.addEventListener('mouseup',e=>{e.preventDefault();_finishZone();});
+    // Touch: 1 finger = draw, 2 fingers = pan/pinch
+    let _pt=null; // pan touch start state
+    canvas.addEventListener('touchstart',e=>{
+      e.preventDefault();
+      if(e.touches.length===2){this._zoneDrawing=null;_pt={px:this._mapPan.x,py:this._mapPan.y,mx:(e.touches[0].clientX+e.touches[1].clientX)/2,my:(e.touches[0].clientY+e.touches[1].clientY)/2,dist:Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY),zoom:this._mapZoom};return;}
+      const p=getPos(e);this._zoneDrawing={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
+    },{passive:false});
+    canvas.addEventListener('touchmove',e=>{
+      e.preventDefault();
+      if(e.touches.length===2&&_pt){const mx=(e.touches[0].clientX+e.touches[1].clientX)/2,my=(e.touches[0].clientY+e.touches[1].clientY)/2;this._mapPan.x=_pt.px+(mx-_pt.mx);this._mapPan.y=_pt.py+(my-_pt.my);const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);this._mapZoom=Math.max(1,Math.min(5,_pt.zoom*dist/_pt.dist));this._updateMapTransform();return;}
+      if(!this._zoneDrawing)return;
+      const p=getPos(e);this._zoneDrawing.x2=p.x;this._zoneDrawing.y2=p.y;this._redrawZones(canvas);
+    },{passive:false});
+    canvas.addEventListener('touchend',e=>{e.preventDefault();if(_pt){_pt=null;this._zoneDrawing=null;return;}_finishZone();},{passive:false});
+    // Zoom control buttons
+    this.shadowRoot.querySelector('#zcenter')?.addEventListener('click',()=>{this._mapZoom=1;this._mapPan={x:0,y:0};this._updateMapTransform();});
+    this.shadowRoot.querySelector('#zzout')?.addEventListener('click',()=>this._zoomMap(-0.5));
+    this.shadowRoot.querySelector('#zzin')?.addEventListener('click',()=>this._zoomMap(0.5));
+  }
   _optSec(type,label,opts,disabled=false){
     const cv=type==='mode'?this._cleanMode:type==='fan'?this._fanLevel:this._waterLevel;
     return`<div class="section${disabled?' disabled':''}" data-section="${type}"><div class="sh"><strong>${label}</strong><em class="sv" data-type="${type}">${this._optLabel(cv)}</em></div><div class="opts">${opts.map(o=>`<button class="opt${o.value===cv?' active':''}" data-type="${type}" data-value="${o.value}"><div class="circle">${this._cicon(o.icon)}</div><div>${o.label}</div></button>`).join('')}</div></div>`;
@@ -374,7 +470,10 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const dedupedName=rawName===half+' '+half||rawName===half+half?half.trim():rawName;
     const title=this._config.title_mode==='custom'&&this._config.title?this._config.title:dedupedName;
     const _isCleaning=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';
-    const btnDisabled=_isCleaning||this._running||this._selectedRooms.length===0;
+    const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;
+    const _activeTab=_camId?this._cleaningModeTab:'rooms';
+    const _noneSelected=_activeTab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
+    const btnDisabled=_isCleaning||this._running||_noneSelected;
     const btnLabel=_isCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
     const _om={
       'Sweep':{icon:'vac',label:'Vacuuming'},'Mop':{icon:'mop',label:'Mopping'},'Sweep Mop':{icon:'vacmop',label:'Vac & Mop'},'Sweep Before Mopping':{icon:'vacbmop',label:'Vac before Mop'},
@@ -496,6 +595,20 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .nr{color:var(--secondary-text-color, #6f7d8d);font-size:14px;padding:20px 0;text-align:center;}
     @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     .spin{display:inline-flex;animation:spin 0.8s linear infinite;}
+    .pill.tab-active{background:var(--primary-color,#03a9f4);color:#fff;border-color:var(--primary-color,#03a9f4);}
+    .zone-map-container{position:relative;margin-top:8px;border-radius:12px;overflow:hidden;line-height:0;background:#000;}
+    .zone-map-inner{position:relative;transform-origin:center center;will-change:transform;}
+    #zone-img{width:100%;display:block;}
+    #zone-canvas{position:absolute;top:0;left:0;width:100%;height:100%;cursor:crosshair;touch-action:none;}
+    .zone-controls{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:inline-flex;align-items:center;background:rgba(10,55,110,0.82);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-radius:999px;padding:4px 6px;gap:2px;z-index:10;box-shadow:0 4px 20px rgba(0,0,0,0.4);}
+    .zone-ctrl-btn{background:none;border:none;cursor:pointer;color:rgba(200,230,255,0.92);width:34px;height:34px;display:grid;place-items:center;border-radius:999px;padding:0;transition:background 0.15s;flex-shrink:0;}
+    .zone-ctrl-btn ha-icon{--mdc-icon-size:20px;width:20px;height:20px;color:inherit;}
+    .zone-ctrl-btn.zc-fit{background:rgba(100,170,255,0.28);}
+    .zone-ctrl-btn:hover{background:rgba(255,255,255,0.18);}
+    .zone-list{margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+    .zone-item{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:10px;background:var(--ha-chip-background,rgba(0,0,0,0.04));border:1px solid var(--ha-chip-border-color,rgba(0,0,0,0.08));font-size:13px;font-weight:600;color:var(--primary-color,#03a9f4);}
+    .zone-del{background:none;border:none;color:var(--secondary-text-color,#a7b3c2);font-size:20px;line-height:1;cursor:pointer;padding:0 4px;font-family:inherit;}
+    .zone-del:hover{color:var(--error-color,#ff6b6b);}
     </style>
     <ha-card>
     <div class="hdr">
@@ -504,15 +617,21 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     ${(()=>{const sl=this._stateLabel();return this._config.show_status!==false&&sl?`<div class="chip" style="color:${sc};border-color:${sc}25;background:${sc}14;">${sl}</div>`:`<div></div>`;})()}
     </div>
     ${(()=>{const _a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let _ud={};try{const _raw=_a['custom.updata_difference'];_ud=typeof _raw==='string'?JSON.parse(_raw):(_raw&&typeof _raw==='object'?_raw:{});}catch(e){}const _df=_ud.differ||[];const _fids=_a['vacuum.fault_ids']||{};const _fl=Array.isArray(_fids.fault)?_fids.fault:(typeof _fids==='string'?JSON.parse(_fids).fault||[]:(_fids.fault||[]));const _we=(_a['vacuum.water_tank_status']>0)||(_a['vacuum.host_water_tank_status']>0)||_fl.includes(210030)||_a['vacuum.fault']===210030;const _sf=(_a['vacuum.sewage_tank_status']>0);if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
-    <div class="section${_isCleaning?' disabled':''}" style="margin-top:0">
-    <div class="sec-hd"><h2>Rooms</h2><div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div></div>
-    ${this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div>`}
+    ${(()=>{const t=_activeTab;return`<div class="section${_isCleaning?' disabled':''}" style="margin-top:0">
+    <div class="sec-hd">
+    <div class="pills">${_camId?`<button class="pill${t==='rooms'?' tab-active':''}" id="tab-rooms">Rooms</button><button class="pill${t==='zones'?' tab-active':''}" id="tab-zones">Zones</button>`:'<h2 style="margin:0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--secondary-text-color,#6f7d8d);">Rooms</h2>'}</div>
+    ${t==='rooms'?'<div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div>':''}
     </div>
+    ${t==='rooms'
+      ?(this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div>`)
+      :(_camId?(()=>{const _ep=this._hass.states[_camId]?.attributes?.entity_picture||'/api/camera_proxy/'+_camId;const _ctl=`<div class="zone-controls"><button class="zone-ctrl-btn zc-fit" id="zcenter" title="Fit to view"><ha-icon icon="mdi:crop-free"></ha-icon></button><button class="zone-ctrl-btn" id="zzout" title="Zoom out"><ha-icon icon="mdi:magnify-minus-outline"></ha-icon></button><button class="zone-ctrl-btn" id="zzin" title="Zoom in"><ha-icon icon="mdi:magnify-plus-outline"></ha-icon></button></div>`;return`<div class="zone-map-container"><div id="zone-inner" class="zone-map-inner" style="transform:translate(${this._mapPan.x}px,${this._mapPan.y}px) scale(${this._mapZoom});"><img id="zone-img" src="${_ep}" /><canvas id="zone-canvas"></canvas></div>${_ctl}</div><div class="zone-list">${this._selectedZones.length===0?'<div class="nr" style="padding:8px 0;font-size:12px;">Draw a rectangle on the map to add a zone</div>':this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('')}</div>`;})():'<div class="nr">No map entity configured</div>')
+    }
+    </div>`;})()}
     ${this._E.mode?this._optSec('mode','Mode',mOpts,_isCleaning):''}
     ${this._E.fan?this._optSec('fan','Suction',fOpts,_isCleaning||this._modeInt()===2):''}
     ${this._E.water?this._optSec('water','Water output',wOpts,_isCleaning||this._modeInt()===1):''}
     <div class="actions">
-    ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:mop",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
+    ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:water",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
     ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _cl=_vs==='cleaning'||_lk;const _pa=_vs==='paused';const _re=_vs==='returning';const _er=_vs==='error';const _id=_vs==='idle'&&!_atBase;const canPause=_cl;const canResume=_pa;const canStop=_cl||_pa||_re||_er;const canHome=_cl||_pa||_id||_er;const _d=v=>v?'':' disabled';return`<div class="actions-top">
     <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}"${_d(canPause)} id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
     <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}"${_d(canResume)} id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
@@ -524,10 +643,14 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     </ha-card>`;
     this.shadowRoot.querySelectorAll('.room').forEach(el=>el.addEventListener('click',()=>this.toggleRoom(el.dataset.id)));
     this.shadowRoot.querySelectorAll('.edit-icon').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();this._showIconPicker(b.dataset.id,this._rooms.find(r=>r.id===b.dataset.id)?.name||'');}));
-    this.shadowRoot.querySelector('#ab').addEventListener('click',()=>this.selectAll());
-    this.shadowRoot.querySelector('#nb').addEventListener('click',()=>this.selectNone());
+    this.shadowRoot.querySelector('#ab')?.addEventListener('click',()=>this.selectAll());
+    this.shadowRoot.querySelector('#nb')?.addEventListener('click',()=>this.selectNone());
+    this.shadowRoot.querySelector('#tab-rooms')?.addEventListener('click',()=>{this._cleaningModeTab='rooms';this._selectedZones=[];this._mapZoom=1;this._mapPan={x:0,y:0};this.render();});
+    this.shadowRoot.querySelector('#tab-zones')?.addEventListener('click',()=>{this._cleaningModeTab='zones';this.render();});
+    this.shadowRoot.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));
     this.shadowRoot.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>this._setOpt(b.dataset.type,b.dataset.value)));
-    this.shadowRoot.querySelector('.start-btn').addEventListener('click',()=>this.startCleaning());
+    this.shadowRoot.querySelector('.start-btn').addEventListener('click',()=>_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning());
+    if(_activeTab==='zones')this._setupZoneCanvas();
     const _flash=id=>{const b=this.shadowRoot.querySelector(id);if(b){b.classList.add('btn-confirm');setTimeout(()=>b?.classList.remove('btn-confirm'),400);}};
     this.shadowRoot.querySelector('#cpa-pause').addEventListener('click',()=>{this._lastAction='pause';this._svc('pause');this._optimisticState='paused';this.render();_flash('#cpa-pause');});
     this.shadowRoot.querySelector('#cpa-resume').addEventListener('click',()=>{this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';this.render();_flash('#cpa-resume');});
