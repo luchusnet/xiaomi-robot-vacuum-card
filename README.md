@@ -16,6 +16,14 @@ The card while the vacuum is actively cleaning. **Rooms** tab is active, one roo
 
 ---
 
+### Zones mode — drawing a cleaning zone on the live map
+
+The **Zones** tab active with the live floor plan visible. A rectangle has been drawn over the "Semicubierto" area (shown with a yellow outline on the map), appearing as **Zone 1** in the list below. The vacuum is charged and the **Start** button is ready to send the zone command.
+
+<img src="docs/screenshot-zones.png" alt="Card in zones mode with a drawn zone" width="380" />
+
+---
+
 ### Idle / Charging — ready to start
 
 The card while the vacuum is docked and charging. No rooms are selected, all action buttons are dimmed, and the **Start** button is available. The status chip shows **Charging**.
