@@ -385,7 +385,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       // fb_point corners order: top-left, bottom-left, bottom-right, top-right
       const zones=this._selectedZones.map((z,i)=>{
         const x1=Math.min(z.vac.x1,z.vac.x2),y1=Math.min(z.vac.y1,z.vac.y2),x2=Math.max(z.vac.x1,z.vac.x2),y2=Math.max(z.vac.y1,z.vac.y2);
-        return{id:i,fb_attr:0,fb_point:[x1,y2,x1,y1,x2,y1,x2,y2],clean_times:1};
+        return{id:i,fb_attr:1,fb_point:[x1,y2,x1,y1,x2,y1,x2,y2],clean_times:1};
       });
       console.log('[vacuum-card] zone_clean aiid=55 zones:',JSON.stringify(zones));
       await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:55,params:[JSON.stringify(zones)]});
