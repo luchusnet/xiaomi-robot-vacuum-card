@@ -386,8 +386,10 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       // Each zone is sent separately (piid=2 accepts one zone at a time)
       for(const z of this._selectedZones){
         const x1=Math.min(z.vac.x1,z.vac.x2),y1=Math.min(z.vac.y1,z.vac.y2),x2=Math.max(z.vac.x1,z.vac.x2),y2=Math.max(z.vac.y1,z.vac.y2);
+        // siid=6 uses meters (piid=1 example: '3.23,6.89'), calibration gives mm → divide by 1000
+        const f=v=>(v/1000).toFixed(3);
         // Corners: top-left, bottom-left, bottom-right, top-right
-        const zoneStr=`${x1},${y2},${x1},${y1},${x2},${y1},${x2},${y2}`;
+        const zoneStr=`${f(x1)},${f(y2)},${f(x1)},${f(y1)},${f(x2)},${f(y1)},${f(x2)},${f(y2)}`;
         console.log('[vacuum-card] zone_clean siid=6 piid=2 zone-points:',zoneStr);
         await this._hass.callService('xiaomi_miot','set_miot_property',{entity_id:avc,siid:6,piid:2,value:zoneStr});
         await new Promise(r=>setTimeout(r,1000));
