@@ -380,14 +380,17 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
       if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
       if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-      // OV21GL: aiid=55 "Temporary Cleaning Zone" (siid=2), piid=24 "Common Params"
-      // Try classic MiIO app_zoned_clean format: [[x1,y1,x2,y2,times], ...]
+      // OV21GL: aiid=55 "Temporary Cleaning Zone" (siid=2) may only configure the zone.
+      // Follow with aiid=7 "Start Cleaning" to actually trigger movement.
       const zones=this._selectedZones.map(z=>{
         const x1=Math.min(z.vac.x1,z.vac.x2),y1=Math.min(z.vac.y1,z.vac.y2),x2=Math.max(z.vac.x1,z.vac.x2),y2=Math.max(z.vac.y1,z.vac.y2);
         return[x1,y1,x2,y2,1];
       });
-      console.log('[vacuum-card] zone_clean aiid=55 params:',JSON.stringify(zones));
+      console.log('[vacuum-card] zone_clean step1 aiid=55:',JSON.stringify(zones));
       await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:55,params:[JSON.stringify(zones)]});
+      await new Promise(r=>setTimeout(r,1500));
+      console.log('[vacuum-card] zone_clean step2 aiid=7 (start)');
+      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:7,params:[]});
       this._running=false;
       this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
       this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
