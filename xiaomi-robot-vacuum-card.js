@@ -380,17 +380,21 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
       if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
       if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-      // OV21GL: aiid=55 "Temporary Cleaning Zone" (siid=2) may only configure the zone.
-      // Follow with aiid=7 "Start Cleaning" to actually trigger movement.
-      const zones=this._selectedZones.map(z=>{
+      // OV21GL uses siid=6 "Point-Zone" service for zone cleaning (miot-spec viomi-v21):
+      // 1. Set zone-points property (siid=6, piid=2) = "x1,y1,x2,y2,x3,y3,x4,y4" (4 corners as string)
+      // 2. Call start-zone-clean action (siid=6, aiid=5, no params)
+      // Each zone is sent separately (piid=2 accepts one zone at a time)
+      for(const z of this._selectedZones){
         const x1=Math.min(z.vac.x1,z.vac.x2),y1=Math.min(z.vac.y1,z.vac.y2),x2=Math.max(z.vac.x1,z.vac.x2),y2=Math.max(z.vac.y1,z.vac.y2);
-        return[x1,y1,x2,y2,1];
-      });
-      console.log('[vacuum-card] zone_clean step1 aiid=55:',JSON.stringify(zones));
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:55,params:[JSON.stringify(zones)]});
-      await new Promise(r=>setTimeout(r,1500));
-      console.log('[vacuum-card] zone_clean step2 aiid=7 (start)');
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:7,params:[]});
+        // Corners: top-left, bottom-left, bottom-right, top-right
+        const zoneStr=`${x1},${y2},${x1},${y1},${x2},${y1},${x2},${y2}`;
+        console.log('[vacuum-card] zone_clean siid=6 piid=2 zone-points:',zoneStr);
+        await this._hass.callService('xiaomi_miot','set_miot_property',{entity_id:avc,siid:6,piid:2,value:zoneStr});
+        await new Promise(r=>setTimeout(r,1000));
+        console.log('[vacuum-card] zone_clean siid=6 aiid=5 (start-zone-clean)');
+        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:6,aiid:5,params:[]});
+        await new Promise(r=>setTimeout(r,500));
+      }
       this._running=false;
       this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
       this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
