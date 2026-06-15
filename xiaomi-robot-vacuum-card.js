@@ -153,7 +153,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       }
       if(elapsed>90*60*1000){this._cleaningLocked=false;}
     }
-    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
+    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];if(this._sensorMode==='live')this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
     if(nvs!==this._vacuumState){this._vacuumState=nvs;this._optimisticState=null;changed=true;}
     if(!this._cleaningLocked&&rawStatus!==this._rawStatus){this._rawStatus=rawStatus;changed=true;}
     if(nb!==this._battery){this._battery=nb;changed=true;}
