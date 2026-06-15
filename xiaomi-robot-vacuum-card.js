@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.1
+// xiaomi-robot-vacuum-card — v1.3.2
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.1';
+const CARD_VERSION = '1.3.2';
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -435,8 +435,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       const{x1,y1,x2,y2}=this._zoneDrawing;
       if(Math.abs(x2-x1)>20&&Math.abs(y2-y1)>20){
         const zone={id:Date.now(),px:{x1,y1,x2,y2}};
-        if(affine){const v1=this._mapPxToVac(x1,y1,affine),v2=this._mapPxToVac(x2,y2,affine);zone.vac={x1:v1.x,y1:v1.y,x2:v2.x,y2:v2.y};}
-        else{zone.vac={x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2)};}
+        if(affine){const v1=this._mapPxToVac(x1,y1,affine),v2=this._mapPxToVac(x2,y2,affine);zone.vac={x1:v1.x,y1:v1.y,x2:v2.x,y2:v2.y};console.log('[vacuum-card] zone drawn px:',JSON.stringify({x1,y1,x2,y2}),'→ vac mm:',JSON.stringify(zone.vac),'canvasSize:',canvas.width+'x'+canvas.height);}
+        else{zone.vac={x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2)};console.warn('[vacuum-card] no calibration — using raw px as mm!');}
         this._selectedZones=[...this._selectedZones,zone];
       }
       this._zoneDrawing=null;this._redrawZones(canvas);this._updZoneList();
