@@ -380,10 +380,15 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
       if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
       if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-      // Xiaomi MiIO app_zoned_clean: zones must be 5-element arrays [x1,y1,x2,y2,count]
-      const zones=this._selectedZones.map(z=>[Math.min(z.vac.x1,z.vac.x2),Math.min(z.vac.y1,z.vac.y2),Math.max(z.vac.x1,z.vac.x2),Math.max(z.vac.y1,z.vac.y2),1]);
-      console.log('[vacuum-card] zone_clean zones:',JSON.stringify(zones));
-      await this._hass.callService('vacuum','send_command',{entity_id:avc,command:'app_zoned_clean',params:{zones}});
+      // OV21GL uses MiOT aiid=55 "Temporary Cleaning Zone" (siid=2)
+      // Zone format: array of {id, fb_attr, fb_point:[x0,y0,x1,y1,x2,y2,x3,y3], clean_times}
+      // fb_point corners order: top-left, bottom-left, bottom-right, top-right
+      const zones=this._selectedZones.map((z,i)=>{
+        const x1=Math.min(z.vac.x1,z.vac.x2),y1=Math.min(z.vac.y1,z.vac.y2),x2=Math.max(z.vac.x1,z.vac.x2),y2=Math.max(z.vac.y1,z.vac.y2);
+        return{id:i,fb_attr:0,fb_point:[x1,y2,x1,y1,x2,y1,x2,y2],clean_times:1};
+      });
+      console.log('[vacuum-card] zone_clean aiid=55 zones:',JSON.stringify(zones));
+      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:55,params:[JSON.stringify(zones)]});
       this._running=false;
       this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
       this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
