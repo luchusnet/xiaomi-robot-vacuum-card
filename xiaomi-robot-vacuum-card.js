@@ -324,33 +324,35 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const avc=this._activeVc||E.vc;
     const btn=this.shadowRoot.querySelector('.start-btn');
     if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
-    if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
-    if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
-    if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-    const roomIds=this._selectedRooms.map(Number);
-    if(this._config.camera_entity||this._config.map_source?.camera_entity){
-      // xiaomi_cloud_map_extractor path: use MiOT action siid=2,aiid=16 (Start Vacuum Room Sweep)
-      // params: piid=15 (Vacuum Room IDs) = JSON array string e.g. "[10,17]"
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:16,params:['['+roomIds.join(',')+']']});
-    } else {
-      // xiaomi_miot S20+ native: configure each room then start
-      for(const id of roomIds){
-        const room=this._rooms.find(r=>r.id===String(id));
-        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:10,params:[JSON.stringify({room_attrs:[{id,room_name:room?room.name:'',fan_level:this._fanInt(),water_level:this._waterInt(),clean_mode:this._modeInt(),clean_times:1,mop_mode:0,on:true}]})]});
+    try{
+      if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
+      if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
+      if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
+      const roomIds=this._selectedRooms.map(Number);
+      if(this._config.camera_entity||this._config.map_source?.camera_entity){
+        // xiaomi_cloud_map_extractor path: use MiOT action siid=2,aiid=16 (Start Vacuum Room Sweep)
+        // params: piid=15 (Vacuum Room IDs) = JSON array string e.g. "[10,17]"
+        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:16,params:['['+roomIds.join(',')+']']});
+      } else {
+        // xiaomi_miot S20+ native: configure each room then start
+        for(const id of roomIds){
+          const room=this._rooms.find(r=>r.id===String(id));
+          await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:10,params:[JSON.stringify({room_attrs:[{id,room_name:room?room.name:'',fan_level:this._fanInt(),water_level:this._waterInt(),clean_mode:this._modeInt(),clean_times:1,mop_mode:0,on:true}]})]});
+          await new Promise(r=>setTimeout(r,1000));
+        }
         await new Promise(r=>setTimeout(r,1000));
+        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:13,params:[JSON.stringify({room:roomIds})]});
       }
-      await new Promise(r=>setTimeout(r,1000));
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:13,params:[JSON.stringify({room:roomIds})]});
-    }
-    this._running=false;
-    this._cleaningLocked=true;
-    this._cleaningLockedAt=Date.now();
-    this._lastAction=null;
-    this._preCleanStatus=this._rawStatus;
-    this._sensorMode='detecting';
-    this._detectionStartedAt=Date.now();
-    this._rawStatus='working';
-    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
+      this._running=false;
+      this._cleaningLocked=true;
+      this._cleaningLockedAt=Date.now();
+      this._lastAction=null;
+      this._preCleanStatus=this._rawStatus;
+      this._sensorMode='detecting';
+      this._detectionStartedAt=Date.now();
+      this._rawStatus='working';
+      this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
+    }catch(e){console.error('[vacuum-card] startCleaning error:',e);this._running=false;}
     this.render();
   }
   _getCalibPts(){const camId=this._config.camera_entity||this._config.map_source?.camera_entity;if(!camId||!this._hass)return null;return this._hass.states[camId]?.attributes?.calibration_points||null;}
@@ -374,15 +376,19 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const E=this._E;const avc=this._activeVc||E.vc;
     const btn=this.shadowRoot.querySelector('.start-btn');
     if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
-    if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
-    if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
-    if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-    const zones=this._selectedZones.map(z=>[Math.min(z.vac.x1,z.vac.x2),Math.min(z.vac.y1,z.vac.y2),Math.max(z.vac.x1,z.vac.x2),Math.max(z.vac.y1,z.vac.y2)]);
-    await this._hass.callService('vacuum','send_command',{entity_id:avc,command:'app_zoned_clean',params:{zones,repeats:1}});
-    this._running=false;
-    this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
-    this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
-    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:[],lockedAt:this._cleaningLockedAt}});
+    try{
+      if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
+      if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
+      if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
+      // Xiaomi MiIO app_zoned_clean: zones must be 5-element arrays [x1,y1,x2,y2,count]
+      const zones=this._selectedZones.map(z=>[Math.min(z.vac.x1,z.vac.x2),Math.min(z.vac.y1,z.vac.y2),Math.max(z.vac.x1,z.vac.x2),Math.max(z.vac.y1,z.vac.y2),1]);
+      console.log('[vacuum-card] zone_clean zones:',JSON.stringify(zones));
+      await this._hass.callService('vacuum','send_command',{entity_id:avc,command:'app_zoned_clean',params:{zones}});
+      this._running=false;
+      this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
+      this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
+      this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:[],lockedAt:this._cleaningLockedAt}});
+    }catch(e){console.error('[vacuum-card] startZoneCleaning error:',e);this._running=false;}
     this.render();
   }
   _removeZone(id){this._selectedZones=this._selectedZones.filter(z=>z.id!==id);const c=this.shadowRoot.querySelector('#zone-canvas');if(c)this._redrawZones(c);this._updZoneList();}
