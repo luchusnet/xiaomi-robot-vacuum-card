@@ -539,7 +539,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .icon-label{display:flex;flex-direction:column;align-items:center;gap:5px;}
     .icon-label span{font-size:11px;font-weight:600;letter-spacing:0.04em;opacity:0.85;color:var(--primary-text-color, #fff);}
     .section{margin-top:10px;} .section.disabled{opacity:0.35;pointer-events:none;transition:opacity 0.2s;}
-    .consumables{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;}
+    .consumables{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;justify-content:center;}
     .cons-chip{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
     .sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
     .sec-hd h2{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--secondary-text-color, #6f7d8d);margin:0;}
