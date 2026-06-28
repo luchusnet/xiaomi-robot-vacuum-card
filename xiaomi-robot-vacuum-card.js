@@ -605,7 +605,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .opt.active .circle{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 12px 28px var(--state-active-shadow, rgba(24,188,242,0.28));}
     ha-icon{--mdc-icon-size:27px;width:27px;height:27px;display:flex;color:var(--primary-text-color, #212121);filter:none;}
     .actions{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
-    .actions-top{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .actions-top{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
     .btn{min-height:46px;border-radius:18px;border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.08));display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));color:var(--primary-text-color, #f5f8fc);cursor:pointer;font-family:inherit;transition:all 0.18s;}
     .btn:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px);}
     .btn:active:not(:disabled){transform:scale(0.93)!important;filter:brightness(0.75)!important;transition:all 0.06s;}
