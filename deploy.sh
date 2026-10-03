@@ -24,7 +24,7 @@ COMMIT_MSG="${1:-Update card}"
 git commit -m "$COMMIT_MSG
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>" 2>/dev/null || echo "  (nothing to commit)"
-git push myfork "$GH_BRANCH" > /dev/null 2>&1
+git push "https://x-access-token:${GH_TOKEN}@github.com/$GH_REPO.git" "$GH_BRANCH" > /dev/null 2>&1
 echo "  ✓ Pushed to fork"
 
 # --- 2. Create GitHub release ---

@@ -1,6 +1,7 @@
-// xiaomi-robot-vacuum-card — v1.3.0
+// xiaomi-robot-vacuum-card — v1.3.7
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.0';
+const CARD_VERSION = '1.3.7';
+const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -30,15 +31,15 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     super();
     this.attachShadow({mode:'open'});
     this._hass=null;this._config={};this._selectedRooms=[];
-    this._fanLevel='Turbo';this._waterLevel='Off';this._cleanMode='Vacuuming';
+    this._fanLevel='Turbo';this._waterLevel='Off';this._cleanMode='Vacuuming';this._route='Daily';
     this._running=false;this._rooms=[];this._rendered=false;this._vacuumState='idle';
     this._battery=null;this._optsSynced=false;this._rawStatus='';this._cleaningLocked=false;this._cleaningLockedAt=0;
-    this._modeOpts=null;this._fanOpts=null;this._waterOpts=null;this._activeVc='';
+    this._modeOpts=null;this._fanOpts=null;this._waterOpts=null;this._routeOpts=null;this._activeVc='';
     this._optimisticState=null;this._lastAction=null;
     this._sensorMode='unknown';this._detectionStartedAt=0;this._staleDetectedAt=0;
     this._cleaningModeTab='rooms';this._selectedZones=[];this._zoneDrawing=null;this._mapZoom=1;this._mapPan={x:0,y:0};
     this._customIcons={};this._customNames={};this._iconsLoaded=false;
-    this._E={vc:'',vc_alt:null,bat:null,status:null,mode:null,fan:null,water:null};
+    this._E={vc:'',vc_alt:null,bat:null,status:null,mode:null,fan:null,water:null,route:null};
   }
   _modeInt(){return{'Sweep':1,'Mop':2,'Sweep Mop':3,'Sweep Before Mopping':4,'Vacuuming':1,'Mopping':2,'Vacuuming & Mopping':3,'Vacuuming before mopping':4}[this._cleanMode]||1;}
   _fanInt(){return{'Silent':1,'Basic':2,'Standard':2,'Strong':3,'Full Speed':4,'Turbo':4}[this._fanLevel]||4;}
@@ -52,6 +53,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       mode:c.mode_select||null,
       fan:c.fan_select||null,
       water:c.water_select||null,
+      route:c.route_select||null,
       status:c.status_sensor||null,
     };
     this._devResolved=false;
@@ -73,6 +75,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
         if(!this._config.mode_select)this._E.mode=fs('_sweep_mop_type');
         if(!this._config.fan_select)this._E.fan=fs('_suction_level');
         if(!this._config.water_select)this._E.water=fs('_mop_water_output_level');
+        if(!this._config.route_select)this._E.route=fs('_sweep_route');
         if(!this._config.entity_alt){
           const alt=sd.find(e=>e.entity_id.startsWith('vacuum.')&&e.entity_id!==this._E.vc)?.entity_id??null;
           if(alt)this._E.vc_alt=alt;
@@ -85,17 +88,21 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       const ms=this._E.mode?h.states[this._E.mode]:null;
       const fs=this._E.fan?h.states[this._E.fan]:null;
       const ws=this._E.water?h.states[this._E.water]:null;
+      const rs=this._E.route?h.states[this._E.route]:null;
       const mo=ms?.attributes?.options||null;
       const fo=fs?.attributes?.options||null;
       const wo=ws?.attributes?.options||null;
+      const ro=rs?.attributes?.options||null;
       if(mo&&JSON.stringify(mo)!==JSON.stringify(this._modeOpts)){this._modeOpts=mo;changed=true;}
       if(fo&&JSON.stringify(fo)!==JSON.stringify(this._fanOpts)){this._fanOpts=fo;changed=true;}
       if(wo&&JSON.stringify(wo)!==JSON.stringify(this._waterOpts)){this._waterOpts=wo;changed=true;}
+      if(ro&&JSON.stringify(ro)!==JSON.stringify(this._routeOpts)){this._routeOpts=ro;changed=true;}
       if(!this._optsSynced){
         if(ms&&this._modeOpts?.includes(ms.state))this._cleanMode=ms.state;
         if(fs&&this._fanOpts?.includes(fs.state))this._fanLevel=fs.state;
         if(ws&&this._waterOpts?.includes(ws.state))this._waterLevel=ws.state;
-        if(ms||fs||ws)this._optsSynced=true;
+        if(rs&&this._routeOpts?.includes(rs.state))this._route=rs.state;
+        if(ms||fs||ws||rs)this._optsSynced=true;
       }
     }
     const vs1=h.states[this._E.vc];
@@ -153,7 +160,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       }
       if(elapsed>90*60*1000){this._cleaningLocked=false;}
     }
-    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
+    if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];if(this._sensorMode==='live')this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
     if(nvs!==this._vacuumState){this._vacuumState=nvs;this._optimisticState=null;changed=true;}
     if(!this._cleaningLocked&&rawStatus!==this._rawStatus){this._rawStatus=rawStatus;changed=true;}
     if(nb!==this._battery){this._battery=nb;changed=true;}
@@ -198,6 +205,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       w3:'M 8.6089838,23.531194 C 2.6875586,21.327244 0.2566252,15.277189 3.1624756,9.976077 4.4817597,7.5693097 9.5572552,1.530018 11.235673,0.36979759 c 1.055591,-0.72967325 1.065496,-0.72298935 4.863885,3.28326921 4.894427,5.1622255 6.182939,7.6686432 5.936004,11.5466492 -0.226228,3.552882 -1.783077,5.974233 -4.858937,7.557144 -2.498337,1.285696 -6.276397,1.627139 -8.5676412,0.774334 z m 7.2909992,-2.438103 c 2.084799,-0.94651 3.949211,-3.448067 4.33314,-5.813949 0.192049,-1.183484 -0.02452,-2.135115 -0.878138,-3.858519 C 17.823348,8.3283227 12.745726,2.3636388 11.915994,2.6820354 10.814223,3.1048136 6.0009357,9.0404616 4.9250236,11.303134 c -1.2363387,2.60008 -1.279758,3.777357 -0.2240972,6.076271 1.8848026,4.10452 6.7700846,5.724541 11.1990566,3.713686 z M 9.1685084,17.508482 C 9.299439,16.585106 9.518532,16.511366 12.13102,16.511366 c 2.531778,0 2.821125,0.08902 2.821125,0.868039 0,0.770644 -0.332376,0.882534 -2.962511,0.997116 -2.872839,0.125171 -2.9582366,0.09891 -2.8211256,-0.868039 z M 9.0928849,14.12426 c 0,-0.785358 0.2893476,-0.868039 3.0381351,-0.868039 2.748787,0 3.038135,0.08268 3.038135,0.868039 0,0.785358 -0.289348,0.868038 -3.038135,0.868038 -2.7487875,0 -3.0381351,-0.08268 -3.0381351,-0.868038 z M 9.4005872,11.683162 C 9.2313501,11.513938 9.0928849,11.008479 9.0928849,10.55992 c 0,-0.7301509 0.3066867,-0.8020679 2.9296301,-0.687183 2.597506,0.1137998 2.92963,0.226732 2.92963,0.996378 0,0.758232 -0.331634,0.884097 -2.621928,0.994903 -1.442059,0.06979 -2.7603926,-0.01172 -2.9296298,-0.180856 z',
     };
     if(key==='w0')return`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="${c}"><path d="M 9.0787806,21.456886 C 5.3881729,20.139861 3.2313399,17.113642 3.2313399,13.252452 c 0,-3.092553 1.3736914,-5.5692746 5.5067278,-9.9284576 3.4569913,-3.64617294 3.4662293,-3.65239785 4.4305003,-2.98585646 1.533291,1.05990036 6.169926,6.57699636 7.375137,8.77565916 3.283562,5.9901499 -1.097341,12.8739909 -8.193067,12.8739909 -0.981316,0 -2.4536502,-0.238886 -3.2718574,-0.530902 z m 6.8185944,-2.198663 c 1.857744,-0.947733 3.040088,-2.380335 3.653032,-4.42615 C 20.352941,12.153457 18.977033,9.2368997 14.643218,4.4302445 L 12.544728,2.1028014 10.366104,4.34262 c -2.7856519,2.8638957 -5.0513098,6.231415 -5.3833751,8.00147 -0.3127087,1.666849 0.6365587,4.429521 1.9261345,5.605633 2.4128671,2.200566 6.1682936,2.747248 8.9885116,1.3085 z"/><rect width="28.327147" height="2.5751948" x="-14.523537" y="16.042799" transform="rotate(-45)"/></svg>`;
+      if(typeof key==='string'&&key.startsWith('mdi:'))return`<ha-icon icon="${key}" style="--mdc-icon-size:${sz}px;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;"></ha-icon>`;
       if(!i[key])return'';
       return`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="${c}"><path d="${i[key]}"/></svg>`;
   }
@@ -243,7 +251,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _updateEditMode(){this.classList.toggle('ha-edit-mode',this._isEditMode());}
   connectedCallback(){this._onUrlChange=()=>this._updateEditMode();window.addEventListener('popstate',this._onUrlChange);window.addEventListener('location-changed',this._onUrlChange);}
   disconnectedCallback(){window.removeEventListener('popstate',this._onUrlChange);window.removeEventListener('location-changed',this._onUrlChange);}
-  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};} try{const cs=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state'});const st=cs?.value;if(st&&Array.isArray(st.rooms)&&st.lockedAt&&(Date.now()-st.lockedAt<90*60*1000)){this._selectedRooms=st.rooms;if(!this._cleaningLocked){this._cleaningLocked=true;this._cleaningLockedAt=st.lockedAt;this._sensorMode='detecting';this._detectionStartedAt=st.lockedAt;}}}catch(e){}this.render();}
+  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};} try{const cs=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state'});const st=cs?.value;if(st&&Array.isArray(st.rooms)&&st.lockedAt&&(Date.now()-st.lockedAt<90*60*1000)){this._selectedRooms=st.rooms;if(!this._cleaningLocked){this._cleaningLocked=true;this._cleaningLockedAt=st.lockedAt;this._sensorMode='detecting';this._detectionStartedAt=st.lockedAt;}}else if(st){this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}}catch(e){}this.render();}
   _saveIcon(id,icon){this._customIcons[id]=icon;this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-icons',value:this._customIcons});this.render();}
   _clearIcon(id){delete this._customIcons[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-icons',value:this._customIcons});this.render();}  _saveName(id,name){if(name.trim())this._customNames[id]=name.trim();else delete this._customNames[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-names',value:this._customNames});this.render();}
   _roomIconHtml(r){const c=this._customIcons[r.id];return`<ha-icon class="ribox-icon" icon="${c||r.icon}"></ha-icon>`;}
@@ -294,11 +302,12 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   selectAll(){this._selectedRooms=this._rooms.map(r=>r.id);this._updR();this._updS();}
   selectNone(){this._selectedRooms=[];this._updR();this._updS();}
   _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
-  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ic=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;const _tab=_camId?this._cleaningModeTab:'rooms';const _none=_tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;b.disabled=_ic||_none;b.innerHTML=_ic?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
+  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ac=this._vacuumState==='cleaning'||this._vacuumState==='returning';const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;const _tab=_camId?this._cleaningModeTab:'rooms';const _none=_tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;b.disabled=_ac||_none;b.innerHTML=_ac?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
   _setOpt(type,value){
     if(type==='mode')this._cleanMode=value;
     else if(type==='fan')this._fanLevel=value;
     else if(type==='water')this._waterLevel=value;
+    else if(type==='route')this._route=value;
     this.shadowRoot.querySelectorAll(`.opt[data-type="${type}"]`).forEach(b=>b.classList.toggle('active',b.dataset.value===value));
     const el=this.shadowRoot.querySelector(`.sv[data-type="${type}"]`);
     if(el)el.textContent=this._optLabel(value);
@@ -315,6 +324,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     'Vacuuming':'Vacuuming','Mopping':'Mopping','Vacuuming & Mopping':'Vac & Mop','Vacuuming before mopping':'Vac before Mop',
     'Silent':'Silent','Basic':'Standard','Standard':'Standard','Strong':'Strong','Full Speed':'Turbo','Turbo':'Turbo',
     'Off':'Off','Level1':'Level 1','Level2':'Level 2','Level3':'Level 3',
+    'Quick':'Quick','Daily':'Standard','Careful':'Deep',
   })[v]||v;}
   _svc(s){this._hass.callService('vacuum',s,{entity_id:this._activeVc||this._E.vc});}
   async startCleaning(){
@@ -324,33 +334,36 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const avc=this._activeVc||E.vc;
     const btn=this.shadowRoot.querySelector('.start-btn');
     if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
-    if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
-    if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
-    if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-    const roomIds=this._selectedRooms.map(Number);
-    if(this._config.camera_entity||this._config.map_source?.camera_entity){
-      // xiaomi_cloud_map_extractor path: use MiOT action siid=2,aiid=16 (Start Vacuum Room Sweep)
-      // params: piid=15 (Vacuum Room IDs) = JSON array string e.g. "[10,17]"
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:16,params:['['+roomIds.join(',')+']']});
-    } else {
-      // xiaomi_miot S20+ native: configure each room then start
-      for(const id of roomIds){
-        const room=this._rooms.find(r=>r.id===String(id));
-        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:10,params:[JSON.stringify({room_attrs:[{id,room_name:room?room.name:'',fan_level:this._fanInt(),water_level:this._waterInt(),clean_mode:this._modeInt(),clean_times:1,mop_mode:0,on:true}]})]});
+    try{
+      if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
+      if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
+      if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
+      if(E.route){await this._hass.callService('select','select_option',{entity_id:E.route,option:this._route});await new Promise(r=>setTimeout(r,1500));}
+      const roomIds=this._selectedRooms.map(Number);
+      if(this._config.camera_entity||this._config.map_source?.camera_entity){
+        // xiaomi_cloud_map_extractor path: use MiOT action siid=2,aiid=16 (Start Vacuum Room Sweep)
+        // params: piid=15 (Vacuum Room IDs) = JSON array string e.g. "[10,17]"
+        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:16,params:['['+roomIds.join(',')+']']});
+      } else {
+        // xiaomi_miot S20+ native: configure each room then start
+        for(const id of roomIds){
+          const room=this._rooms.find(r=>r.id===String(id));
+          await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:10,params:[JSON.stringify({room_attrs:[{id,room_name:room?room.name:'',fan_level:this._fanInt(),water_level:this._waterInt(),clean_mode:this._modeInt(),clean_times:1,mop_mode:0,on:true}]})]});
+          await new Promise(r=>setTimeout(r,1000));
+        }
         await new Promise(r=>setTimeout(r,1000));
+        await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:13,params:[JSON.stringify({room:roomIds})]});
       }
-      await new Promise(r=>setTimeout(r,1000));
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:13,params:[JSON.stringify({room:roomIds})]});
-    }
-    this._running=false;
-    this._cleaningLocked=true;
-    this._cleaningLockedAt=Date.now();
-    this._lastAction=null;
-    this._preCleanStatus=this._rawStatus;
-    this._sensorMode='detecting';
-    this._detectionStartedAt=Date.now();
-    this._rawStatus='working';
-    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
+      this._running=false;
+      this._cleaningLocked=true;
+      this._cleaningLockedAt=Date.now();
+      this._lastAction=null;
+      this._preCleanStatus=this._rawStatus;
+      this._sensorMode='detecting';
+      this._detectionStartedAt=Date.now();
+      this._rawStatus='working';
+      this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:this._selectedRooms,lockedAt:this._cleaningLockedAt}});
+    }catch(e){console.error('[vacuum-card] startCleaning error:',e);this._running=false;}
     this.render();
   }
   _getCalibPts(){const camId=this._config.camera_entity||this._config.map_source?.camera_entity;if(!camId||!this._hass)return null;return this._hass.states[camId]?.attributes?.calibration_points||null;}
@@ -374,22 +387,30 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const E=this._E;const avc=this._activeVc||E.vc;
     const btn=this.shadowRoot.querySelector('.start-btn');
     if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
-    if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
-    if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
-    if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
-    const zones=this._selectedZones.map(z=>[Math.min(z.vac.x1,z.vac.x2),Math.min(z.vac.y1,z.vac.y2),Math.max(z.vac.x1,z.vac.x2),Math.max(z.vac.y1,z.vac.y2)]);
-    await this._hass.callService('vacuum','send_command',{entity_id:avc,command:'app_zoned_clean',params:{zones,repeats:1}});
-    this._running=false;
-    this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
-    this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
-    this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:[],lockedAt:this._cleaningLockedAt}});
+    try{
+      if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
+      if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
+      if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
+      if(E.route){await this._hass.callService('select','select_option',{entity_id:E.route,option:this._route});await new Promise(r=>setTimeout(r,1500));}
+      // Same payload the Mi Home plugin (com.xiaomi.robovac v57) sends: the robot ignores aiid 55/9.
+      const zones=this._selectedZones.slice(0,MAX_ZONES).map(z=>{
+        const x1=Math.floor(Math.min(z.vac.x1,z.vac.x2)),y1=Math.floor(Math.min(z.vac.y1,z.vac.y2)),x2=Math.floor(Math.max(z.vac.x1,z.vac.x2)),y2=Math.floor(Math.max(z.vac.y1,z.vac.y2));
+        return{blocks_region:[x1,y2,x1,y1,x2,y1,x2,y2],blocks_attr:0};
+      });
+      console.log('[vacuum-card] zone_clean start-zone-sweep aiid=37 zones:',JSON.stringify(zones));
+      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:37,params:[JSON.stringify(zones)]});
+      this._running=false;
+      this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
+      this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
+      this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:{rooms:[],lockedAt:this._cleaningLockedAt}});
+    }catch(e){console.error('[vacuum-card] startZoneCleaning error:',e);this._running=false;}
     this.render();
   }
   _removeZone(id){this._selectedZones=this._selectedZones.filter(z=>z.id!==id);const c=this.shadowRoot.querySelector('#zone-canvas');if(c)this._redrawZones(c);this._updZoneList();}
   _updZoneList(){
     const zl=this.shadowRoot.querySelector('.zone-list');if(!zl)return;
     if(this._selectedZones.length===0){zl.innerHTML='<div class="nr" style="padding:8px 0;font-size:12px;">Draw a rectangle on the map to add a zone</div>';}
-    else{zl.innerHTML=this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('');zl.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));}
+    else{zl.innerHTML=this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('')+(this._selectedZones.length>=MAX_ZONES?`<div class="nr" style="padding:4px 0;font-size:12px;">Max ${MAX_ZONES} zones</div>`:'');zl.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));}
     this._updS();
   }
   _redrawZones(canvas){
@@ -418,10 +439,10 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const _finishZone=()=>{
       if(!this._zoneDrawing)return;
       const{x1,y1,x2,y2}=this._zoneDrawing;
-      if(Math.abs(x2-x1)>20&&Math.abs(y2-y1)>20){
+      if(Math.abs(x2-x1)>20&&Math.abs(y2-y1)>20&&this._selectedZones.length<MAX_ZONES){
         const zone={id:Date.now(),px:{x1,y1,x2,y2}};
-        if(affine){const v1=this._mapPxToVac(x1,y1,affine),v2=this._mapPxToVac(x2,y2,affine);zone.vac={x1:v1.x,y1:v1.y,x2:v2.x,y2:v2.y};}
-        else{zone.vac={x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2)};}
+        if(affine){const v1=this._mapPxToVac(x1,y1,affine),v2=this._mapPxToVac(x2,y2,affine);zone.vac={x1:v1.x,y1:v1.y,x2:v2.x,y2:v2.y};console.log('[vacuum-card] zone drawn px:',JSON.stringify({x1,y1,x2,y2}),'→ vac mm:',JSON.stringify(zone.vac),'canvasSize:',canvas.width+'x'+canvas.height);}
+        else{zone.vac={x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2)};console.warn('[vacuum-card] no calibration — using raw px as mm!');}
         this._selectedZones=[...this._selectedZones,zone];
       }
       this._zoneDrawing=null;this._redrawZones(canvas);this._updZoneList();
@@ -449,7 +470,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this.shadowRoot.querySelector('#zzin')?.addEventListener('click',()=>this._zoomMap(0.5));
   }
   _optSec(type,label,opts,disabled=false){
-    const cv=type==='mode'?this._cleanMode:type==='fan'?this._fanLevel:this._waterLevel;
+    const cv=type==='mode'?this._cleanMode:type==='fan'?this._fanLevel:type==='water'?this._waterLevel:this._route;
     return`<div class="section${disabled?' disabled':''}" data-section="${type}"><div class="sh"><strong>${label}</strong><em class="sv" data-type="${type}">${this._optLabel(cv)}</em></div><div class="opts">${opts.map(o=>`<button class="opt${o.value===cv?' active':''}" data-type="${type}" data-value="${o.value}"><div class="circle">${this._cicon(o.icon)}</div><div>${o.label}</div></button>`).join('')}</div></div>`;
   }
   render(){
@@ -469,23 +490,27 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const half=rawName.slice(0,rawName.length/2);
     const dedupedName=rawName===half+' '+half||rawName===half+half?half.trim():rawName;
     const title=this._config.title_mode==='custom'&&this._config.title?this._config.title:dedupedName;
-    const _isCleaning=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';
+    const _actuallyCleaning=this._vacuumState==='cleaning'||this._vacuumState==='returning';
+    const _isCleaning=this._cleaningLocked||_actuallyCleaning;
     const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;
     const _activeTab=_camId?this._cleaningModeTab:'rooms';
     const _noneSelected=_activeTab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
-    const btnDisabled=_isCleaning||this._running||_noneSelected;
-    const btnLabel=_isCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
+    const btnDisabled=_actuallyCleaning||this._running||_noneSelected;
+    const btnLabel=_actuallyCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:_isCleaning?`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
     const _om={
       'Sweep':{icon:'vac',label:'Vacuuming'},'Mop':{icon:'mop',label:'Mopping'},'Sweep Mop':{icon:'vacmop',label:'Vac & Mop'},'Sweep Before Mopping':{icon:'vacbmop',label:'Vac before Mop'},
       'Vacuuming':{icon:'vac',label:'Vacuuming'},'Mopping':{icon:'mop',label:'Mopping'},'Vacuuming & Mopping':{icon:'vacmop',label:'Vac & Mop'},'Vacuuming before mopping':{icon:'vacbmop',label:'Vac before Mop'},
       'Silent':{icon:'silent',label:'Silent'},'Basic':{icon:'standard',label:'Standard'},'Standard':{icon:'standard',label:'Standard'},'Strong':{icon:'strong',label:'Strong'},'Full Speed':{icon:'turbo',label:'Turbo'},'Turbo':{icon:'turbo',label:'Turbo'},
       'Off':{icon:'w0',label:'Off'},'Level1':{icon:'w1',label:'Level 1'},'Level2':{icon:'w2',label:'Level 2'},'Level3':{icon:'w3',label:'Level 3'},
+      'Quick':{icon:'mdi:run-fast',label:'Quick'},'Daily':{icon:'mdi:walk',label:'Standard'},'Careful':{icon:'mdi:magnify-scan',label:'Deep'},
     };
     const _fb={icon:'spn',label:'?'};
     const _mOrder=['Vacuuming','Vacuuming & Mopping','Vacuuming before mopping','Mopping','Sweep','Sweep Mop','Sweep Before Mopping','Mop'];
     const mOpts=(this._modeOpts||['Vacuuming','Vacuuming & Mopping','Vacuuming before mopping','Mopping']).slice().sort((a,b)=>{const ai=_mOrder.indexOf(a),bi=_mOrder.indexOf(b);return(ai<0?99:ai)-(bi<0?99:bi);}).map(v=>({value:v,...(_om[v]||{..._fb,label:v})}));
     const fOpts=(this._fanOpts||['Silent','Standard','Strong','Turbo']).map(v=>({value:v,...(_om[v]||{..._fb,label:v})}));
     const wOpts=(this._waterOpts||['Off','Level1','Level2','Level3']).map(v=>({value:v,...(_om[v]||{..._fb,label:v})}));
+    const _rOrder=['Quick','Daily','Careful'];
+    const rOpts=(this._routeOpts||['Quick','Daily','Careful']).slice().sort((a,b)=>{const ai=_rOrder.indexOf(a),bi=_rOrder.indexOf(b);return(ai<0?99:ai)-(bi<0?99:bi);}).map(v=>({value:v,...(_om[v]||{..._fb,label:v})}));
     this.shadowRoot.innerHTML=`<style>
     :host{display:block;font-family:'Figtree',system-ui,sans-serif;}
     ha-card{
@@ -510,7 +535,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .icon-label{display:flex;flex-direction:column;align-items:center;gap:5px;}
     .icon-label span{font-size:11px;font-weight:600;letter-spacing:0.04em;opacity:0.85;color:var(--primary-text-color, #fff);}
     .section{margin-top:10px;} .section.disabled{opacity:0.35;pointer-events:none;transition:opacity 0.2s;}
-    .consumables{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;}
+    .consumables{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;justify-content:center;}
     .cons-chip{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
     .sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
     .sec-hd h2{font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--secondary-text-color, #6f7d8d);margin:0;}
@@ -576,7 +601,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .opt.active .circle{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 12px 28px var(--state-active-shadow, rgba(24,188,242,0.28));}
     ha-icon{--mdc-icon-size:27px;width:27px;height:27px;display:flex;color:var(--primary-text-color, #212121);filter:none;}
     .actions{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
-    .actions-top{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+    .actions-top{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
     .btn{min-height:46px;border-radius:18px;border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.08));display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));color:var(--primary-text-color, #f5f8fc);cursor:pointer;font-family:inherit;transition:all 0.18s;}
     .btn:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px);}
     .btn:active:not(:disabled){transform:scale(0.93)!important;filter:brightness(0.75)!important;transition:all 0.06s;}
@@ -630,11 +655,11 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     ${this._E.mode?this._optSec('mode','Mode',mOpts,_isCleaning):''}
     ${this._E.fan?this._optSec('fan','Suction',fOpts,_isCleaning||this._modeInt()===2):''}
     ${this._E.water?this._optSec('water','Water output',wOpts,_isCleaning||this._modeInt()===1):''}
+    ${this._E.route?this._optSec('route','Route',rOpts,_isCleaning):''}
     <div class="actions">
     ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:water",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
-    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _cl=_vs==='cleaning'||_lk;const _pa=_vs==='paused';const _re=_vs==='returning';const _er=_vs==='error';const _id=_vs==='idle'&&!_atBase;const canPause=_cl;const canResume=_pa;const canStop=_cl||_pa||_re||_er;const canHome=_cl||_pa||_id||_er;const _d=v=>v?'':' disabled';return`<div class="actions-top">
-    <button class="btn pause-btn${this._lastAction==='pause'?' btn-last':''}"${_d(canPause)} id="cpa-pause" title="Pause"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:pause"></ha-icon><span>Pause</span></div></button>
-    <button class="btn resume-btn${this._lastAction==='resume'?' btn-last':''}"${_d(canResume)} id="cpa-resume" title="Resume"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon><span>Resume</span></div></button>
+    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _cl=_vs==='cleaning'||_lk;const _pa=_vs==='paused';const _re=_vs==='returning';const _er=_vs==='error';const _id=_vs==='idle'&&!_atBase;const canPauseResume=_cl||_pa;const canStop=_cl||_pa||_re||_er;const canHome=_cl||_pa||_id||_er;const _d=v=>v?'':' disabled';const _pr=_pa?{icon:'mdi:play',label:'Resume',cls:'resume-btn',act:'resume'}:{icon:'mdi:pause',label:'Pause',cls:'pause-btn',act:'pause'};return`<div class="actions-top">
+    <button class="btn ${_pr.cls}${this._lastAction===_pr.act?' btn-last':''}"${_d(canPauseResume)} id="cpa" title="${_pr.label}"><div class="icon-label"><ha-icon class="ctrl-icon" icon="${_pr.icon}"></ha-icon><span>${_pr.label}</span></div></button>
     <button class="btn stop-btn${this._lastAction==='stop'?' btn-last':''}"${_d(canStop)} id="cs" title="Stop"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:stop"></ha-icon><span>Stop</span></div></button>
     <button class="btn home-btn${this._lastAction==='home'?' btn-last':''}"${_d(canHome)} id="ch" title="Return home"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon><span>Home</span></div></button>
     </div>`;})()}
@@ -652,8 +677,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this.shadowRoot.querySelector('.start-btn').addEventListener('click',()=>_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning());
     if(_activeTab==='zones')this._setupZoneCanvas();
     const _flash=id=>{const b=this.shadowRoot.querySelector(id);if(b){b.classList.add('btn-confirm');setTimeout(()=>b?.classList.remove('btn-confirm'),400);}};
-    this.shadowRoot.querySelector('#cpa-pause').addEventListener('click',()=>{this._lastAction='pause';this._svc('pause');this._optimisticState='paused';this.render();_flash('#cpa-pause');});
-    this.shadowRoot.querySelector('#cpa-resume').addEventListener('click',()=>{this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';this.render();_flash('#cpa-resume');});
+    this.shadowRoot.querySelector('#cpa').addEventListener('click',()=>{const isPaused=this._vacuumState==='paused';if(isPaused){this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';}else{this._lastAction='pause';this._svc('pause');this._optimisticState='paused';}this.render();_flash('#cpa');});
     this.shadowRoot.querySelector('#cs').addEventListener('click',()=>{this._lastAction='stop';this._svc('stop');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState=null;this.render();_flash('#cs');});
     this.shadowRoot.querySelector('#ch').addEventListener('click',()=>{this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState='returning';this.render();_flash('#ch');setTimeout(()=>{if(this._lastAction==='home'){this._lastAction=null;this.render();}},3000);});
   }
