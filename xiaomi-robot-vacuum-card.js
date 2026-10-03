@@ -1,6 +1,7 @@
-// xiaomi-robot-vacuum-card — v1.3.2
+// xiaomi-robot-vacuum-card — v1.3.7
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.2';
+const CARD_VERSION = '1.3.7';
+const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _syncThemeVars() {
@@ -250,7 +251,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _updateEditMode(){this.classList.toggle('ha-edit-mode',this._isEditMode());}
   connectedCallback(){this._onUrlChange=()=>this._updateEditMode();window.addEventListener('popstate',this._onUrlChange);window.addEventListener('location-changed',this._onUrlChange);}
   disconnectedCallback(){window.removeEventListener('popstate',this._onUrlChange);window.removeEventListener('location-changed',this._onUrlChange);}
-  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};} try{const cs=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state'});const st=cs?.value;if(st&&Array.isArray(st.rooms)&&st.lockedAt&&(Date.now()-st.lockedAt<90*60*1000)){this._selectedRooms=st.rooms;if(!this._cleaningLocked){this._cleaningLocked=true;this._cleaningLockedAt=st.lockedAt;this._sensorMode='detecting';this._detectionStartedAt=st.lockedAt;}}}catch(e){}this.render();}
+  async _loadCustomIcons(){try{const ri=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-icons'});this._customIcons=ri?.value||{};}catch(e){this._customIcons={};} try{const rn=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-names'});this._customNames=rn?.value||{};}catch(e){this._customNames={};} try{const cs=await this._hass.callWS({type:'frontend/get_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state'});const st=cs?.value;if(st&&Array.isArray(st.rooms)&&st.lockedAt&&(Date.now()-st.lockedAt<90*60*1000)){this._selectedRooms=st.rooms;if(!this._cleaningLocked){this._cleaningLocked=true;this._cleaningLockedAt=st.lockedAt;this._sensorMode='detecting';this._detectionStartedAt=st.lockedAt;}}else if(st){this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}}catch(e){}this.render();}
   _saveIcon(id,icon){this._customIcons[id]=icon;this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-icons',value:this._customIcons});this.render();}
   _clearIcon(id){delete this._customIcons[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-icons',value:this._customIcons});this.render();}  _saveName(id,name){if(name.trim())this._customNames[id]=name.trim();else delete this._customNames[id];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-names',value:this._customNames});this.render();}
   _roomIconHtml(r){const c=this._customIcons[r.id];return`<ha-icon class="ribox-icon" icon="${c||r.icon}"></ha-icon>`;}
@@ -301,7 +302,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   selectAll(){this._selectedRooms=this._rooms.map(r=>r.id);this._updR();this._updS();}
   selectNone(){this._selectedRooms=[];this._updR();this._updS();}
   _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
-  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ic=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;const _tab=_camId?this._cleaningModeTab:'rooms';const _none=_tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;b.disabled=_ic||_none;b.innerHTML=_ic?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
+  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ac=this._vacuumState==='cleaning'||this._vacuumState==='returning';const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;const _tab=_camId?this._cleaningModeTab:'rooms';const _none=_tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;b.disabled=_ac||_none;b.innerHTML=_ac?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
   _setOpt(type,value){
     if(type==='mode')this._cleanMode=value;
     else if(type==='fan')this._fanLevel=value;
@@ -391,19 +392,13 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       if(E.fan){await this._hass.callService('select','select_option',{entity_id:E.fan,option:this._fanLevel});await new Promise(r=>setTimeout(r,1500));}
       if(E.water){await this._hass.callService('select','select_option',{entity_id:E.water,option:this._waterLevel});await new Promise(r=>setTimeout(r,1500));}
       if(E.route){await this._hass.callService('select','select_option',{entity_id:E.route,option:this._route});await new Promise(r=>setTimeout(r,1500));}
-      // OV21GL zone cleaning (miot-spec xiaomi-ov21gl):
-      // 1. aiid=55 "Temporary Cleaning Zone" (siid=2) — defines zones via Common Params (piid=24)
-      //    Params: JSON array of zone objects with 4-corner fb_point in mm
-      // 2. aiid=9 "Start Custom Sweep" (siid=2) — starts cleaning the configured zones
-      const zones=this._selectedZones.map((z,i)=>{
-        const x1=Math.min(z.vac.x1,z.vac.x2),y1=Math.min(z.vac.y1,z.vac.y2),x2=Math.max(z.vac.x1,z.vac.x2),y2=Math.max(z.vac.y1,z.vac.y2);
-        return{id:i,fb_attr:1,fb_point:[x1,y2,x1,y1,x2,y1,x2,y2],clean_times:1};
+      // Same payload the Mi Home plugin (com.xiaomi.robovac v57) sends: the robot ignores aiid 55/9.
+      const zones=this._selectedZones.slice(0,MAX_ZONES).map(z=>{
+        const x1=Math.floor(Math.min(z.vac.x1,z.vac.x2)),y1=Math.floor(Math.min(z.vac.y1,z.vac.y2)),x2=Math.floor(Math.max(z.vac.x1,z.vac.x2)),y2=Math.floor(Math.max(z.vac.y1,z.vac.y2));
+        return{blocks_region:[x1,y2,x1,y1,x2,y1,x2,y2],blocks_attr:0};
       });
-      console.log('[vacuum-card] zone_clean aiid=55 zones:',JSON.stringify(zones));
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:55,params:[JSON.stringify(zones)]});
-      await new Promise(r=>setTimeout(r,1000));
-      console.log('[vacuum-card] zone_clean aiid=9 (start custom sweep)');
-      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:9,params:[]});
+      console.log('[vacuum-card] zone_clean start-zone-sweep aiid=37 zones:',JSON.stringify(zones));
+      await this._hass.callService('xiaomi_miot','call_action',{entity_id:avc,siid:2,aiid:37,params:[JSON.stringify(zones)]});
       this._running=false;
       this._cleaningLocked=true;this._cleaningLockedAt=Date.now();this._lastAction=null;
       this._sensorMode='detecting';this._detectionStartedAt=Date.now();this._rawStatus='working';
@@ -415,7 +410,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _updZoneList(){
     const zl=this.shadowRoot.querySelector('.zone-list');if(!zl)return;
     if(this._selectedZones.length===0){zl.innerHTML='<div class="nr" style="padding:8px 0;font-size:12px;">Draw a rectangle on the map to add a zone</div>';}
-    else{zl.innerHTML=this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('');zl.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));}
+    else{zl.innerHTML=this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('')+(this._selectedZones.length>=MAX_ZONES?`<div class="nr" style="padding:4px 0;font-size:12px;">Max ${MAX_ZONES} zones</div>`:'');zl.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));}
     this._updS();
   }
   _redrawZones(canvas){
@@ -444,7 +439,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const _finishZone=()=>{
       if(!this._zoneDrawing)return;
       const{x1,y1,x2,y2}=this._zoneDrawing;
-      if(Math.abs(x2-x1)>20&&Math.abs(y2-y1)>20){
+      if(Math.abs(x2-x1)>20&&Math.abs(y2-y1)>20&&this._selectedZones.length<MAX_ZONES){
         const zone={id:Date.now(),px:{x1,y1,x2,y2}};
         if(affine){const v1=this._mapPxToVac(x1,y1,affine),v2=this._mapPxToVac(x2,y2,affine);zone.vac={x1:v1.x,y1:v1.y,x2:v2.x,y2:v2.y};console.log('[vacuum-card] zone drawn px:',JSON.stringify({x1,y1,x2,y2}),'→ vac mm:',JSON.stringify(zone.vac),'canvasSize:',canvas.width+'x'+canvas.height);}
         else{zone.vac={x1:Math.round(x1),y1:Math.round(y1),x2:Math.round(x2),y2:Math.round(y2)};console.warn('[vacuum-card] no calibration — using raw px as mm!');}
@@ -495,12 +490,13 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const half=rawName.slice(0,rawName.length/2);
     const dedupedName=rawName===half+' '+half||rawName===half+half?half.trim():rawName;
     const title=this._config.title_mode==='custom'&&this._config.title?this._config.title:dedupedName;
-    const _isCleaning=this._cleaningLocked||this._vacuumState==='cleaning'||this._vacuumState==='returning';
+    const _actuallyCleaning=this._vacuumState==='cleaning'||this._vacuumState==='returning';
+    const _isCleaning=this._cleaningLocked||_actuallyCleaning;
     const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;
     const _activeTab=_camId?this._cleaningModeTab:'rooms';
     const _noneSelected=_activeTab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
-    const btnDisabled=_isCleaning||this._running||_noneSelected;
-    const btnLabel=_isCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
+    const btnDisabled=_actuallyCleaning||this._running||_noneSelected;
+    const btnLabel=_actuallyCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:_isCleaning?`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
     const _om={
       'Sweep':{icon:'vac',label:'Vacuuming'},'Mop':{icon:'mop',label:'Mopping'},'Sweep Mop':{icon:'vacmop',label:'Vac & Mop'},'Sweep Before Mopping':{icon:'vacbmop',label:'Vac before Mop'},
       'Vacuuming':{icon:'vac',label:'Vacuuming'},'Mopping':{icon:'mop',label:'Mopping'},'Vacuuming & Mopping':{icon:'vacmop',label:'Vac & Mop'},'Vacuuming before mopping':{icon:'vacbmop',label:'Vac before Mop'},
