@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.7
+// xiaomi-robot-vacuum-card — v1.3.12
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.7';
+const CARD_VERSION = '1.3.12';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -35,7 +35,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._running=false;this._rooms=[];this._rendered=false;this._vacuumState='idle';
     this._battery=null;this._optsSynced=false;this._rawStatus='';this._cleaningLocked=false;this._cleaningLockedAt=0;
     this._modeOpts=null;this._fanOpts=null;this._waterOpts=null;this._routeOpts=null;this._activeVc='';
-    this._optimisticState=null;this._lastAction=null;
+    this._optimisticState=null;this._lastAction=null;this._waterSnoozeUntil=0;this._waterDismissed=false;this._lastStartKind=null;this._lastStartAt=0;
     this._sensorMode='unknown';this._detectionStartedAt=0;this._staleDetectedAt=0;
     this._cleaningModeTab='rooms';this._selectedZones=[];this._zoneDrawing=null;this._mapZoom=1;this._mapPan={x:0,y:0};
     this._customIcons={};this._customNames={};this._iconsLoaded=false;
@@ -167,20 +167,22 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     if(changed||!this._rendered)this.render();
   }
   _icon(n){
-    if(!n)return'mdi:home';const l=n.toLowerCase();
-    if(l.includes('bedroom'))return'mdi:bed';
-    if(l.includes('kitchen'))return'mdi:food-fork-drink';
-    if(l.includes('hallway'))return'mdi:door';
-    if(l.includes('toilet'))return'mdi:toilet';
-    if(l.includes('living'))return'mdi:sofa';
-    if(l.includes('bathroom'))return'mdi:shower';
-    if(l.includes('office'))return'mdi:desk';
-    if(l.includes('dining'))return'mdi:silverware-fork-knife';
-    if(l.includes('garage'))return'mdi:garage';
-    if(l.includes('laundry'))return'mdi:washing-machine';
-    if(l.includes('study'))return'mdi:book-open';
-    if(l.includes('balcony')||l.includes('terrace'))return'mdi:balcony';
-    if(l.includes('corridor')||l.includes('entrance'))return'mdi:door';
+    if(!n)return'mdi:home';const l=n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+    const has=(...k)=>k.some(x=>l.includes(x));const main=has('princ','master','main','suite');
+    if(has('bathroom','bano','toilet','wc','aseo','toilette','toillete'))return main||has('bathtub','banera')?'mdi:bathtub':'mdi:shower';
+    if(has('bedroom','dormitorio','habitacion','cuarto','pieza','recamara')||/^hab/.test(l))return main?'mdi:bed-king':'mdi:bed';
+    if(has('walk-in','closet','wardrobe','vestidor','placard'))return'mdi:hanger';
+    if(has('kitchen','cocina'))return'mdi:stove';
+    if(has('dining','comedor'))return'mdi:table-chair';
+    if(has('living','lounge','sala','estar'))return'mdi:sofa';
+    if(has('office','oficina','despacho','escritorio'))return'mdi:desk';
+    if(has('study','estudio'))return'mdi:book-open';
+    if(has('laundry','lavadero','lavanderia'))return'mdi:washing-machine';
+    if(has('hallway','corridor','pasillo','hall','entrance','entrada','recibidor'))return'mdi:door-open';
+    if(has('garage','garaje','cochera'))return'mdi:garage';
+    if(has('balcony','terrace','balcon','terraza','semicubierto','galeria','quincho'))return'mdi:balcony';
+    if(has('patio','garden','jardin'))return'mdi:flower';
+    if(has('play','juegos','kids','ninos'))return'mdi:toy-brick';
     return'mdi:home';
   }
   _svg(key,sz=22,c='currentColor'){
@@ -301,8 +303,57 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   toggleRoom(id){this._selectedRooms=this._selectedRooms.includes(id)?this._selectedRooms.filter(r=>r!==id):[...this._selectedRooms,id];this._updR();this._updS();}
   selectAll(){this._selectedRooms=this._rooms.map(r=>r.id);this._updR();this._updS();}
   selectNone(){this._selectedRooms=[];this._updR();this._updS();}
+  // Rooms grid: two balanced rows when the card is wide enough for every name on one line, otherwise three rows.
+  _roomsGridStyle(){const n=this._rooms.length;if(!n)return'';const two=Math.ceil(n/2),three=Math.max(3,Math.ceil(n/3));const longest=Math.max(...this._rooms.map(r=>(this._customNames[r.id]||r.name).length));const col=Math.max(72,Math.round(longest*6.8+12)),gap=8;const need=two*col+(two-1)*gap;
+    return`<style>.rooms{grid-template-columns:repeat(${two},minmax(0,1fr));}.room.wide{grid-column:auto;}@container rooms (max-width:${need}px){.rooms{grid-template-columns:repeat(${three},minmax(0,1fr));}.room.wide{grid-column:span 2;}}</style>`;}
   _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
-  _updS(){const b=this.shadowRoot.querySelector('.start-btn');if(!b||this._running)return;const _ac=this._vacuumState==='cleaning'||this._vacuumState==='returning';const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;const _tab=_camId?this._cleaningModeTab:'rooms';const _none=_tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;b.disabled=_ac||_none;b.innerHTML=_ac?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;}
+  _tankIssues(){const a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let fl=[];try{const f=a['vacuum.fault_ids'];const o=typeof f==='string'?JSON.parse(f):(f||{});fl=Array.isArray(o.fault)?o.fault:[];}catch(e){}const waterFault=fl.includes(210030)||a['vacuum.fault']===210030;return{cleanEmpty:(a['vacuum.water_tank_status']>0)||(a['vacuum.host_water_tank_status']>0)||waterFault,dirtyFull:a['vacuum.sewage_tank_status']>0,waterFault};}
+  _primaryAction(){
+    const vs=this._vacuumState;
+    const camId=this._config.camera_entity||this._config.map_source?.camera_entity;
+    const tab=camId?this._cleaningModeTab:'rooms';
+    const none=tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
+    if(this._running)return{act:'busy',cls:'start-btn',icon:null,label:'Starting...',disabled:true};
+    if(vs==='paused'||vs==='error')return{act:'resume',cls:'resume-btn',icon:'mdi:play',label:'Resume',disabled:false};
+    if(vs==='cleaning'||this._cleaningLocked)return{act:'pause',cls:'pause-btn',icon:'mdi:pause',label:'Pause',disabled:false};
+    return{act:'start',cls:'start-btn',icon:'mdi:play',label:'Start',disabled:none||vs==='returning'};
+  }
+  _primaryHtml(p){return p.icon?`<ha-icon class="ctrl-icon" icon="${p.icon}"></ha-icon>&nbsp;${p.label}`:`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;${p.label}`;}
+  _tankSvg(ce,df){const bad='#ff5050';const badge=x=>`<g><circle cx="${x}" cy="68" r="15" fill="${bad}"/><text x="${x}" y="74" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">!</text></g>`;return`<svg class="tank-svg" viewBox="0 0 220 150" xmlns="http://www.w3.org/2000/svg">
+<rect x="14" y="8" width="192" height="134" rx="16" fill="rgba(144,164,174,0.16)" stroke="rgba(144,164,174,0.55)" stroke-width="2"/>
+<rect x="30" y="22" width="72" height="94" rx="10" fill="rgba(255,255,255,0.9)" stroke="${ce?bad:'#64B5F6'}" stroke-width="${ce?3:2}"/>
+${ce?'<rect x="35" y="106" width="62" height="6" rx="3" fill="#90CAF9"/>':'<rect x="35" y="44" width="62" height="68" rx="6" fill="#64B5F6"/>'}
+<rect x="118" y="22" width="72" height="94" rx="10" fill="rgba(255,255,255,0.9)" stroke="${df?bad:'#A1887F'}" stroke-width="${df?3:2}"/>
+${df?'<rect x="123" y="28" width="62" height="84" rx="6" fill="#8D6E63"/>':'<rect x="123" y="98" width="62" height="14" rx="4" fill="#A1887F"/>'}
+<text x="66" y="134" text-anchor="middle" font-size="11" fill="currentColor">Clean water</text>
+<text x="154" y="134" text-anchor="middle" font-size="11" fill="currentColor">Dirty water</text>
+${ce?badge(66):''}${df?badge(154):''}
+</svg>`;}
+  _waterModalHtml(){
+    const{cleanEmpty:ce,dirtyFull:df,waterFault}=this._tankIssues();
+    if(!ce&&!df){this._waterDismissed=false;return '';}
+    const vs=this._vacuumState;
+    const ctx=waterFault||this._cleaningLocked||['paused','error','cleaning','returning'].includes(vs)||(Date.now()-this._lastStartAt<15*60*1000);
+    if(!ctx||this._waterDismissed||Date.now()<this._waterSnoozeUntil)return '';
+    const title=ce&&df?'Water tanks need attention':ce?'Clean water tank is empty':'Dirty water tank is full';
+    const msg=ce&&df?'Refill the clean water tank and empty the dirty water tank, then tap Continue.':ce?'Refill the clean water tank in the base station, then tap Continue.':'Empty the dirty water tank in the base station, then tap Continue.';
+    return`<div class="water-modal"><div class="water-box">${this._tankSvg(ce,df)}<div class="water-title">${title}</div><div class="water-msg">${msg}</div><div class="water-btns"><button class="btn primary-btn cancel-btn" id="wcancel">Cancel</button><button class="btn primary-btn start-btn" id="wcont">Continue</button></div></div></div>`;
+  }
+  _waterContinue(){
+    this._waterSnoozeUntil=Date.now()+30000;
+    setTimeout(()=>this.render(),30500);
+    this.render();
+    const vs=this._vacuumState;
+    const taskRunning=vs==='paused'||vs==='error'||(this._cleaningLocked&&this._sensorMode==='live');
+    if(!taskRunning&&this._lastStartKind==='rooms'&&this._selectedRooms.length){this.startCleaning();return;}
+    if(!taskRunning&&this._lastStartKind==='zones'&&this._selectedZones.length){this.startZoneCleaning();return;}
+    this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';this.render();
+  }
+  _waterCancel(){
+    this._waterDismissed=true;
+    this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState=null;this.render();
+  }
+  _updS(){const b=this.shadowRoot.querySelector('#cpa');if(!b||this._running)return;const p=this._primaryAction();b.disabled=p.disabled;b.className=`btn primary-btn ${p.cls}`;b.innerHTML=this._primaryHtml(p);}
   _setOpt(type,value){
     if(type==='mode')this._cleanMode=value;
     else if(type==='fan')this._fanLevel=value;
@@ -329,10 +380,10 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _svc(s){this._hass.callService('vacuum',s,{entity_id:this._activeVc||this._E.vc});}
   async startCleaning(){
     if(this._selectedRooms.length===0||this._running||this._vacuumState==='cleaning'||this._vacuumState==='returning')return;
-    this._running=true;
+    this._running=true;this._lastStartKind='rooms';this._lastStartAt=Date.now();
     const E=this._E;
     const avc=this._activeVc||E.vc;
-    const btn=this.shadowRoot.querySelector('.start-btn');
+    const btn=this.shadowRoot.querySelector('#cpa');
     if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
     try{
       if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
@@ -383,9 +434,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _mapPxToVac(px,py,T){return{x:Math.round(T.a*px+T.b*py+T.c),y:Math.round(T.d*px+T.e*py+T.f)};}
   async startZoneCleaning(){
     if(this._selectedZones.length===0||this._running||this._vacuumState==='cleaning'||this._vacuumState==='returning')return;
-    this._running=true;
+    this._running=true;this._lastStartKind='zones';this._lastStartAt=Date.now();
     const E=this._E;const avc=this._activeVc||E.vc;
-    const btn=this.shadowRoot.querySelector('.start-btn');
+    const btn=this.shadowRoot.querySelector('#cpa');
     if(btn){btn.disabled=true;btn.innerHTML=`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Starting...`;}
     try{
       if(E.mode){await this._hass.callService('select','select_option',{entity_id:E.mode,option:this._cleanMode});await new Promise(r=>setTimeout(r,2000));}
@@ -428,7 +479,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       ctx.strokeRect(Math.min(x1,x2),Math.min(y1,y2),Math.abs(x2-x1),Math.abs(y2-y1));ctx.setLineDash([]);
     }
   }
-  _updateMapTransform(){const inner=this.shadowRoot.querySelector('#zone-inner');if(inner)inner.style.transform=`translate(${this._mapPan.x}px,${this._mapPan.y}px) scale(${this._mapZoom})`;}
+  _updateMapTransform(){const inner=this.shadowRoot.querySelector('#zone-inner');if(!inner)return;const mx=(this._mapZoom-1)*inner.offsetWidth/2,my=(this._mapZoom-1)*inner.offsetHeight/2;this._mapPan={x:Math.max(-mx,Math.min(mx,this._mapPan.x)),y:Math.max(-my,Math.min(my,this._mapPan.y))};inner.style.transform=`translate(${this._mapPan.x}px,${this._mapPan.y}px) scale(${this._mapZoom})`;}
   _zoomMap(d){this._mapZoom=Math.max(1,Math.min(5,Math.round((this._mapZoom+d)*10)/10));if(this._mapZoom===1)this._mapPan={x:0,y:0};this._updateMapTransform();}
   _setupZoneCanvas(){
     const canvas=this.shadowRoot.querySelector('#zone-canvas');const img=this.shadowRoot.querySelector('#zone-img');if(!canvas||!img)return;
@@ -450,16 +501,16 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     canvas.addEventListener('mousedown',e=>{e.preventDefault();const p=getPos(e);this._zoneDrawing={x1:p.x,y1:p.y,x2:p.x,y2:p.y};});
     canvas.addEventListener('mousemove',e=>{if(!this._zoneDrawing)return;const p=getPos(e);this._zoneDrawing.x2=p.x;this._zoneDrawing.y2=p.y;this._redrawZones(canvas);});
     canvas.addEventListener('mouseup',e=>{e.preventDefault();_finishZone();});
-    // Touch: 1 finger = draw, 2 fingers = pan/pinch
+    // Touch: 1 finger = draw, 2 fingers = pan only; zoom is only via the toolbar buttons
     let _pt=null; // pan touch start state
     canvas.addEventListener('touchstart',e=>{
       e.preventDefault();
-      if(e.touches.length===2){this._zoneDrawing=null;_pt={px:this._mapPan.x,py:this._mapPan.y,mx:(e.touches[0].clientX+e.touches[1].clientX)/2,my:(e.touches[0].clientY+e.touches[1].clientY)/2,dist:Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY),zoom:this._mapZoom};return;}
+      if(e.touches.length===2){this._zoneDrawing=null;this._redrawZones(canvas);_pt={px:this._mapPan.x,py:this._mapPan.y,mx:(e.touches[0].clientX+e.touches[1].clientX)/2,my:(e.touches[0].clientY+e.touches[1].clientY)/2};return;}
       const p=getPos(e);this._zoneDrawing={x1:p.x,y1:p.y,x2:p.x,y2:p.y};
     },{passive:false});
     canvas.addEventListener('touchmove',e=>{
       e.preventDefault();
-      if(e.touches.length===2&&_pt){const mx=(e.touches[0].clientX+e.touches[1].clientX)/2,my=(e.touches[0].clientY+e.touches[1].clientY)/2;this._mapPan.x=_pt.px+(mx-_pt.mx);this._mapPan.y=_pt.py+(my-_pt.my);const dist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);this._mapZoom=Math.max(1,Math.min(5,_pt.zoom*dist/_pt.dist));this._updateMapTransform();return;}
+      if(e.touches.length===2&&_pt){const mx=(e.touches[0].clientX+e.touches[1].clientX)/2,my=(e.touches[0].clientY+e.touches[1].clientY)/2;this._mapPan.x=_pt.px+(mx-_pt.mx);this._mapPan.y=_pt.py+(my-_pt.my);this._updateMapTransform();return;}
       if(!this._zoneDrawing)return;
       const p=getPos(e);this._zoneDrawing.x2=p.x;this._zoneDrawing.y2=p.y;this._redrawZones(canvas);
     },{passive:false});
@@ -471,7 +522,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   }
   _optSec(type,label,opts,disabled=false){
     const cv=type==='mode'?this._cleanMode:type==='fan'?this._fanLevel:type==='water'?this._waterLevel:this._route;
-    return`<div class="section${disabled?' disabled':''}" data-section="${type}"><div class="sh"><strong>${label}</strong><em class="sv" data-type="${type}">${this._optLabel(cv)}</em></div><div class="opts">${opts.map(o=>`<button class="opt${o.value===cv?' active':''}" data-type="${type}" data-value="${o.value}"><div class="circle">${this._cicon(o.icon)}</div><div>${o.label}</div></button>`).join('')}</div></div>`;
+    return`<div class="section${disabled?' disabled':''}" data-section="${type}"><div class="srow"><div class="sh"><strong>${label}</strong><em class="sv" data-type="${type}">${this._optLabel(cv)}</em></div><div class="opts">${opts.map(o=>`<button class="opt${o.value===cv?' active':''}" data-type="${type}" data-value="${o.value}"><div class="circle">${this._cicon(o.icon)}</div><div>${o.label}</div></button>`).join('')}</div></div></div>`;
   }
   render(){
     this._rendered=true;this._updateEditMode();
@@ -494,9 +545,6 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const _isCleaning=this._cleaningLocked||_actuallyCleaning;
     const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;
     const _activeTab=_camId?this._cleaningModeTab:'rooms';
-    const _noneSelected=_activeTab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
-    const btnDisabled=_actuallyCleaning||this._running||_noneSelected;
-    const btnLabel=_actuallyCleaning?`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;Cleaning...`:_isCleaning?`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`:`<ha-icon class="ctrl-icon" icon="mdi:play"></ha-icon>&nbsp;Start`;
     const _om={
       'Sweep':{icon:'vac',label:'Vacuuming'},'Mop':{icon:'mop',label:'Mopping'},'Sweep Mop':{icon:'vacmop',label:'Vac & Mop'},'Sweep Before Mopping':{icon:'vacbmop',label:'Vac before Mop'},
       'Vacuuming':{icon:'vac',label:'Vacuuming'},'Mopping':{icon:'mop',label:'Mopping'},'Vacuuming & Mopping':{icon:'vacmop',label:'Vac & Mop'},'Vacuuming before mopping':{icon:'vacbmop',label:'Vac before Mop'},
@@ -514,6 +562,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this.shadowRoot.innerHTML=`<style>
     :host{display:block;font-family:'Figtree',system-ui,sans-serif;}
     ha-card{
+      position: relative;
       background: var(--ha-card-background, var(--card-background-color, #fff));
       border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(0,0,0,0.12)));
       border-radius: var(--ha-card-border-radius, 24px);
@@ -534,7 +583,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .ctrl-icon{--mdc-icon-size:24px;width:24px;height:24px;display:flex;filter:none;color:var(--primary-text-color, #212121);}
     .icon-label{display:flex;flex-direction:column;align-items:center;gap:5px;}
     .icon-label span{font-size:11px;font-weight:600;letter-spacing:0.04em;opacity:0.85;color:var(--primary-text-color, #fff);}
-    .section{margin-top:10px;} .section.disabled{opacity:0.35;pointer-events:none;transition:opacity 0.2s;}
+    .section{margin-top:6px;container:sec / inline-size;} .section.disabled{opacity:0.35;pointer-events:none;transition:opacity 0.2s;}
     .consumables{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;justify-content:center;}
     .cons-chip{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid;}
     .sec-hd{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
@@ -551,12 +600,13 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
       cursor:pointer;font-family:inherit;transition:background 0.18s;
     }
     .pill:hover{filter:brightness(0.92);}
-    .rooms{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-flow:dense;gap:10px;}
+    .rooms-wrap{container:rooms / inline-size;}
+    .rooms{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-flow:dense;gap:8px;}
     .room{
-      position:relative;min-height:72px;padding:10px 8px;border-radius:22px;overflow:hidden;
+      position:relative;min-height:56px;padding:8px 4px;border-radius:18px;overflow:hidden;min-width:0;
       background: var(--ha-room-background, linear-gradient(180deg,rgba(0,0,0,0.03),rgba(0,0,0,0.015)));
       border:1px solid var(--ha-room-border-color, var(--divider-color, rgba(0,0,0,0.06)));
-      display:flex;flex-direction:column;justify-content:center;align-items:center;gap:6px;text-align:center;cursor:pointer;transition:all 0.18s;
+      display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;text-align:center;cursor:pointer;transition:all 0.18s;
       color: var(--secondary-text-color, #a7b3c2);
     }
     .room.active{
@@ -588,12 +638,14 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .modal-footer{margin-top:14px;display:flex;justify-content:flex-end;}
     .reset-btn{padding:8px 16px;border-radius:999px;background:var(--ha-chip-background, rgba(0,0,0,0.05));border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.1));color:var(--secondary-text-color, #a7b3c2);font-size:13px;cursor:pointer;font-family:inherit;}
     .reset-btn:hover{filter:brightness(0.92);color:var(--primary-text-color, #f5f8fc);}
-    .ibox{width:40px;height:40px;border-radius:14px;display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.05));color:inherit;flex-shrink:0;transition:all 0.18s;}
+    .ibox{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.05));color:inherit;flex-shrink:0;transition:all 0.18s;}
     .room.active .ibox{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 8px 20px var(--state-active-shadow, rgba(24,188,242,0.35));color:var(--primary-text-color, #fff);}
-    .rname{font-size:13px;font-weight:600;line-height:1.2;word-break:break-word;overflow-wrap:break-word;width:100%;}
-    .sh{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--ha-divider-color, rgba(0,0,0,0.06));}
-    .sh strong{font-size:17px;color:var(--primary-text-color, #f5f8fc);}
-    .sh em{font-style:normal;color:var(--secondary-text-color, #a7b3c2);font-size:14px;}
+    .rname{font-size:12px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;}
+    .srow{display:grid;grid-template-columns:104px minmax(0,1fr);align-items:center;gap:10px;padding-top:6px;border-top:1px solid var(--ha-divider-color, rgba(0,0,0,0.06));}
+    .sh{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0;}
+    @container sec (max-width:380px){.srow{grid-template-columns:1fr;gap:6px;border-top:none;padding-top:0;}.sh{flex-direction:row;align-items:baseline;gap:8px;padding-bottom:6px;border-bottom:1px solid var(--ha-divider-color, rgba(0,0,0,0.06));}}
+    .sh strong{font-size:16px;line-height:1.2;color:var(--primary-text-color, #f5f8fc);}
+    .sh em{font-style:normal;color:var(--secondary-text-color, #a7b3c2);font-size:13px;}
     .opts{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
     .opt{display:grid;justify-items:center;gap:5px;text-align:center;cursor:pointer;background:none;border:none;color:var(--secondary-text-color, #a7b3c2);font-family:inherit;padding:2px 0;transition:color 0.18s;font-size:12px;}
     .opt.active{color:var(--primary-color, #03a9f4);font-weight:700;}
@@ -601,7 +653,16 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .opt.active .circle{background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:transparent;box-shadow:0 12px 28px var(--state-active-shadow, rgba(24,188,242,0.28));}
     ha-icon{--mdc-icon-size:27px;width:27px;height:27px;display:flex;color:var(--primary-text-color, #212121);filter:none;}
     .actions{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
-    .actions-top{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+    .actions-row{display:grid;grid-template-columns:1fr auto;gap:8px;}
+    .btn.primary-btn{display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:15px;color:var(--primary-text-color, #212121);}
+    .actions-row .home-btn{padding:0 22px;}
+    .water-modal{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+    .water-box{background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:20px;padding:16px 18px;width:86%;max-width:340px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.35);}
+    .tank-svg{width:100%;max-width:240px;height:auto;display:block;margin:0 auto 8px;color:var(--secondary-text-color,#6f7d8d);}
+    .water-title{font-size:16px;font-weight:700;margin-bottom:6px;}
+    .water-msg{font-size:13px;color:var(--secondary-text-color,#6f7d8d);margin-bottom:14px;line-height:1.35;}
+    .water-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .water-btns .cancel-btn{background:var(--ha-chip-background, rgba(0,0,0,0.06));color:var(--primary-text-color,#212121);border-color:var(--ha-chip-border-color, rgba(0,0,0,0.12));}
     .btn{min-height:46px;border-radius:18px;border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.08));display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));color:var(--primary-text-color, #f5f8fc);cursor:pointer;font-family:inherit;transition:all 0.18s;}
     .btn:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px);}
     .btn:active:not(:disabled){transform:scale(0.93)!important;filter:brightness(0.75)!important;transition:all 0.06s;}
@@ -611,11 +672,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     .start-btn{display:flex;justify-content:center;gap:10px;background:var(--state-active-background, var(--primary-color, #03a9f4));border-color:var(--state-active-border-color, var(--primary-color, #03a9f4));color:var(--primary-text-color, #fff);font-weight:700;font-size:15px;font-family:inherit;}
     .pause-btn{background:var(--state-paused-background, var(--warning-color, #fff3cd));color:var(--warning-color, #ffb648);border-color:var(--state-paused-border-color, var(--warning-color, #ffb648));}
     .resume-btn{background:var(--state-on-background, var(--success-color, #d4edda));color:var(--success-color, #43d17c);border-color:var(--state-on-border-color, var(--success-color, #43d17c));}
-    .stop-btn{background:var(--state-error-background, var(--error-color, #f8d7da));color:var(--error-color, #ff6b6b);border-color:var(--state-error-border-color, var(--error-color, #ff6b6b));}
     .home-btn{background:var(--state-home-background, var(--primary-color, #03a9f4));color:var(--primary-color, #8bdcff);border-color:var(--state-home-border-color, var(--primary-color, #8bdcff));}
     .pause-btn.btn-last{background:var(--state-paused-background-active, rgba(255,182,72,0.32));border-color:var(--state-paused-border-color-active, rgba(255,182,72,0.55));box-shadow:0 0 12px var(--state-paused-shadow, rgba(255,182,72,0.2));}
     .resume-btn.btn-last{background:var(--state-on-background-active, rgba(67,209,124,0.32));border-color:var(--state-on-border-color-active, rgba(67,209,124,0.55));box-shadow:0 0 12px var(--state-on-shadow, rgba(67,209,124,0.2));}
-    .stop-btn.btn-last{background:var(--state-error-background-active, rgba(255,107,107,0.32));border-color:var(--state-error-border-color-active, rgba(255,107,107,0.55));box-shadow:0 0 12px var(--state-error-shadow, rgba(255,107,107,0.2));}
     .home-btn.btn-last{background:var(--state-home-background-active, rgba(24,188,242,0.2));border-color:var(--state-home-border-color-active, rgba(24,188,242,0.45));box-shadow:0 0 12px var(--state-home-shadow, rgba(24,188,242,0.15));}
     .nr{color:var(--secondary-text-color, #6f7d8d);font-size:14px;padding:20px 0;text-align:center;}
     @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -641,14 +700,14 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     <h1>${title}</h1>
     ${(()=>{const sl=this._stateLabel();return this._config.show_status!==false&&sl?`<div class="chip" style="color:${sc};border-color:${sc}25;background:${sc}14;">${sl}</div>`:`<div></div>`;})()}
     </div>
-    ${(()=>{const _a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let _ud={};try{const _raw=_a['custom.updata_difference'];_ud=typeof _raw==='string'?JSON.parse(_raw):(_raw&&typeof _raw==='object'?_raw:{});}catch(e){}const _df=_ud.differ||[];const _fids=_a['vacuum.fault_ids']||{};const _fl=Array.isArray(_fids.fault)?_fids.fault:(typeof _fids==='string'?JSON.parse(_fids).fault||[]:(_fids.fault||[]));const _we=(_a['vacuum.water_tank_status']>0)||(_a['vacuum.host_water_tank_status']>0)||_fl.includes(210030)||_a['vacuum.fault']===210030;const _sf=(_a['vacuum.sewage_tank_status']>0);if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
+    ${(()=>{const{cleanEmpty:_we,dirtyFull:_sf}=this._tankIssues();if(!_we&&!_sf)return '';let _w='<div class="warn-chips">';if(_we)_w+='<div class="warn-chip"><ha-icon icon="mdi:water-off"></ha-icon>Clean water empty</div>';if(_sf)_w+='<div class="warn-chip"><ha-icon icon="mdi:bucket-outline"></ha-icon>Dirty water full</div>';return _w+'</div>';})()}
     ${(()=>{const t=_activeTab;return`<div class="section${_isCleaning?' disabled':''}" style="margin-top:0">
     <div class="sec-hd">
     <div class="pills">${_camId?`<button class="pill${t==='rooms'?' tab-active':''}" id="tab-rooms">Rooms</button><button class="pill${t==='zones'?' tab-active':''}" id="tab-zones">Zones</button>`:'<h2 style="margin:0;font-size:11px;letter-spacing:0.16em;text-transform:uppercase;color:var(--secondary-text-color,#6f7d8d);">Rooms</h2>'}</div>
     ${t==='rooms'?'<div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div>':''}
     </div>
     ${t==='rooms'
-      ?(this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`<div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div>`)
+      ?(this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`${this._roomsGridStyle()}<div class="rooms-wrap"><div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div></div>`)
       :(_camId?(()=>{const _ep=this._hass.states[_camId]?.attributes?.entity_picture||'/api/camera_proxy/'+_camId;const _ctl=`<div class="zone-controls"><button class="zone-ctrl-btn zc-fit" id="zcenter" title="Fit to view"><ha-icon icon="mdi:crop-free"></ha-icon></button><button class="zone-ctrl-btn" id="zzout" title="Zoom out"><ha-icon icon="mdi:magnify-minus-outline"></ha-icon></button><button class="zone-ctrl-btn" id="zzin" title="Zoom in"><ha-icon icon="mdi:magnify-plus-outline"></ha-icon></button></div>`;return`<div class="zone-map-container"><div id="zone-inner" class="zone-map-inner" style="transform:translate(${this._mapPan.x}px,${this._mapPan.y}px) scale(${this._mapZoom});"><img id="zone-img" src="${_ep}" /><canvas id="zone-canvas"></canvas></div>${_ctl}</div><div class="zone-list">${this._selectedZones.length===0?'<div class="nr" style="padding:8px 0;font-size:12px;">Draw a rectangle on the map to add a zone</div>':this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('')}</div>`;})():'<div class="nr">No map entity configured</div>')
     }
     </div>`;})()}
@@ -658,13 +717,12 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     ${this._E.route?this._optSec('route','Route',rOpts,_isCleaning):''}
     <div class="actions">
     ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:water",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
-    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _cl=_vs==='cleaning'||_lk;const _pa=_vs==='paused';const _re=_vs==='returning';const _er=_vs==='error';const _id=_vs==='idle'&&!_atBase;const canPauseResume=_cl||_pa;const canStop=_cl||_pa||_re||_er;const canHome=_cl||_pa||_id||_er;const _d=v=>v?'':' disabled';const _pr=_pa?{icon:'mdi:play',label:'Resume',cls:'resume-btn',act:'resume'}:{icon:'mdi:pause',label:'Pause',cls:'pause-btn',act:'pause'};return`<div class="actions-top">
-    <button class="btn ${_pr.cls}${this._lastAction===_pr.act?' btn-last':''}"${_d(canPauseResume)} id="cpa" title="${_pr.label}"><div class="icon-label"><ha-icon class="ctrl-icon" icon="${_pr.icon}"></ha-icon><span>${_pr.label}</span></div></button>
-    <button class="btn stop-btn${this._lastAction==='stop'?' btn-last':''}"${_d(canStop)} id="cs" title="Stop"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:stop"></ha-icon><span>Stop</span></div></button>
-    <button class="btn home-btn${this._lastAction==='home'?' btn-last':''}"${_d(canHome)} id="ch" title="Return home"><div class="icon-label"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon><span>Home</span></div></button>
+    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _id=_vs==='idle'&&!_atBase;const canHome=_vs==='cleaning'||_lk||_vs==='paused'||_id||_vs==='error';const _p=this._primaryAction();return`<div class="actions-row">
+    <button class="btn primary-btn ${_p.cls}${this._lastAction===_p.act?' btn-last':''}"${_p.disabled?' disabled':''} id="cpa">${this._primaryHtml(_p)}</button>
+    <button class="btn primary-btn home-btn${this._lastAction==='home'?' btn-last':''}"${canHome?'':' disabled'} id="ch" title="Return home"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon>&nbsp;Home</button>
     </div>`;})()}
-    <button class="btn start-btn"${btnDisabled?' disabled':''}>${btnLabel}</button>
     </div>
+    ${this._waterModalHtml()}
     </ha-card>`;
     this.shadowRoot.querySelectorAll('.room').forEach(el=>el.addEventListener('click',()=>this.toggleRoom(el.dataset.id)));
     this.shadowRoot.querySelectorAll('.edit-icon').forEach(b=>b.addEventListener('click',e=>{e.stopPropagation();this._showIconPicker(b.dataset.id,this._rooms.find(r=>r.id===b.dataset.id)?.name||'');}));
@@ -674,12 +732,12 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this.shadowRoot.querySelector('#tab-zones')?.addEventListener('click',()=>{this._cleaningModeTab='zones';this.render();});
     this.shadowRoot.querySelectorAll('.zone-del').forEach(b=>b.addEventListener('click',()=>this._removeZone(Number(b.dataset.id))));
     this.shadowRoot.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>this._setOpt(b.dataset.type,b.dataset.value)));
-    this.shadowRoot.querySelector('.start-btn').addEventListener('click',()=>_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning());
     if(_activeTab==='zones')this._setupZoneCanvas();
     const _flash=id=>{const b=this.shadowRoot.querySelector(id);if(b){b.classList.add('btn-confirm');setTimeout(()=>b?.classList.remove('btn-confirm'),400);}};
-    this.shadowRoot.querySelector('#cpa').addEventListener('click',()=>{const isPaused=this._vacuumState==='paused';if(isPaused){this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';}else{this._lastAction='pause';this._svc('pause');this._optimisticState='paused';}this.render();_flash('#cpa');});
-    this.shadowRoot.querySelector('#cs').addEventListener('click',()=>{this._lastAction='stop';this._svc('stop');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState=null;this.render();_flash('#cs');});
+    this.shadowRoot.querySelector('#cpa').addEventListener('click',()=>{const p=this._primaryAction();if(p.disabled)return;if(p.act==='start'){_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning();return;}if(p.act==='resume'){this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';}else if(p.act==='pause'){this._lastAction='pause';this._svc('pause');this._optimisticState='paused';}this.render();_flash('#cpa');});
     this.shadowRoot.querySelector('#ch').addEventListener('click',()=>{this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState='returning';this.render();_flash('#ch');setTimeout(()=>{if(this._lastAction==='home'){this._lastAction=null;this.render();}},3000);});
+    this.shadowRoot.querySelector('#wcont')?.addEventListener('click',()=>this._waterContinue());
+    this.shadowRoot.querySelector('#wcancel')?.addEventListener('click',()=>this._waterCancel());
   }
   getCardSize(){return 8;}
   static getConfigElement(){return document.createElement('xiaomi-robot-vacuum-card-editor');}
