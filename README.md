@@ -36,15 +36,17 @@ The card while the vacuum is docked and charging. No rooms are selected, all act
 
 - **Room selection** — tap individual rooms or use All / Clear; rooms are read from the camera entity (`xiaomi_cloud_map_extractor`) or from `vacuum_extend.room_info` (xiaomi_miot fallback)
 - **Zone cleaning** — switch to the **Zones** tab, draw rectangles on the live map to define cleaning zones, then press Start. Supports multiple zones per session.
-- **Map zoom & pan** — zoom in/out with the on-screen controls, pinch-to-zoom and 2-finger pan on touch devices
+- **Map zoom & pan** — zoom in/out with the on-screen controls; 2-finger drag pans the map on touch devices
 - **Mode control** — Vacuuming, Mopping, Vacuuming & Mopping, Vacuuming before mopping
 - **Suction level** — Silent, Standard, Strong, Turbo
 - **Water output** — Off, Level 1, Level 2, Level 3
 - **Mode-aware controls** — Suction disabled when Mopping-only; Water output disabled when Vacuuming-only
-- **Water tank warnings** — animated warning chips appear when clean water is empty or dirty water tank is full
+- **Water tank warnings** — when the base runs out of clean water (or the dirty tank is full) during a task, a dialog with a tank illustration appears over the card with **Continue** / **Cancel**; warning chips stay as a secondary indicator
+- **Two action buttons** — one context-aware main button (Start → Pause → Resume) plus **Home**; Start stays disabled until rooms or zones are selected
+- **Compact layout** — rooms in two balanced rows when the card is wide enough (falls back to three rows), and option titles inline with their buttons
 - **Consumables tracking** — dust bag, main brush, side brush, filter and mop life levels shown as color-coded chips
 - **Room filtering & ordering** — configure which rooms to show and in what order via `rooms:` config key
-- **Custom room icons & names** — tap the edit icon in HA edit mode to customize any room
+- **Custom room icons & names** — default icons are picked from the room name (English or Spanish); tap the edit icon in HA edit mode to customize any room
 - **Auto entity discovery** — mode / suction / water select entities found automatically from the device; no manual entity IDs needed
 - **Cleaning state persistence** — selected rooms and lock state survive browser refresh
 - **Smart unlock detection** — cleaning lock releases as soon as the vacuum is detected as docked/charged, with sensor staleness detection as fallback
@@ -164,7 +166,7 @@ When `map_source.camera_entity` is configured, a **Zones** tab appears next to R
 | − | Zoom out (0.5× step, minimum 1×) |
 | + | Zoom in (0.5× step, maximum 5×) |
 
-On touch devices: 1-finger drag draws a zone; 2-finger pinch/drag zooms and pans.
+On touch devices: 1-finger drag draws a zone; 2-finger drag pans (zoom with the buttons).
 
 Switching back to **Rooms** clears all drawn zones and resets the map view.
 
@@ -191,6 +193,12 @@ The cleaning lock releases automatically once the vacuum is detected as docked o
 
 ## Changelog
 
+- **v1.3.12** — Room icons chosen from Spanish/English room names (bed, bathtub, stove, hanger…)
+- **v1.3.11** — Mode / Suction / Water output / Route titles inline with their buttons (stacked on narrow cards)
+- **v1.3.10** — Compact room buttons in two balanced rows, single-line names
+- **v1.3.9** — Two action buttons (context-aware Start/Pause/Resume + Home, Stop removed); water-tank dialog with Continue/Cancel
+- **v1.3.8** — 2-finger drag pans the zone map (no pinch-zoom); pan clamped to map bounds
+- **v1.3.7** — Zone cleaning via start-zone-sweep (aiid 37)
 - **v1.3.0** — Zone cleaning with map drawing; zoom/pan controls; 2-finger pinch/pan on touch; calibration-point coordinate transform
 - **v1.2.0** — Rooms/Zones tab structure; `xiaomi_cloud_map_extractor` room loading; animated water tank warning chips; improved stale-sensor detection
 - **v1.0.3** — Rename to `xiaomi-robot-vacuum-card`; fix stale mode unlock when docked/charged; water tank warning improvements for OV21GL; initial map extractor support
