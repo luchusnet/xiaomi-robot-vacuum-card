@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.15
+// xiaomi-robot-vacuum-card — v1.3.16
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.15';
+const CARD_VERSION = '1.3.16';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -679,13 +679,13 @@ ${ce?badge(66):''}${df?badge(154):''}
     .actions-row{display:grid;grid-template-columns:1fr auto;gap:8px;}
     .btn.primary-btn{display:flex;align-items:center;justify-content:center;gap:6px;font-weight:700;font-size:15px;color:var(--primary-text-color, #212121);}
     .actions-row .home-btn{padding:0 22px;}
-    .water-modal{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.45);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
-    .water-box{background:var(--ha-card-background,var(--card-background-color,#fff));color:var(--primary-text-color,#212121);border-radius:20px;padding:16px 18px;width:86%;max-width:340px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.35);}
+    .water-modal{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);border-radius:inherit;}
+    .water-box{background:var(--primary-background-color,#fff);border:1px solid var(--divider-color,rgba(0,0,0,0.12));color:var(--primary-text-color,#212121);border-radius:20px;padding:16px 18px;width:86%;max-width:340px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.35);}
     .tank-svg{width:100%;max-width:240px;height:auto;display:block;margin:0 auto 8px;color:var(--secondary-text-color,#6f7d8d);}
     .water-title{font-size:16px;font-weight:700;margin-bottom:6px;}
     .water-msg{font-size:13px;color:var(--secondary-text-color,#6f7d8d);margin-bottom:14px;line-height:1.35;}
     .water-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
-    .water-btns .cancel-btn{background:var(--ha-chip-background, rgba(0,0,0,0.06));color:var(--primary-text-color,#212121);border-color:var(--ha-chip-border-color, rgba(0,0,0,0.12));}
+    .water-btns .cancel-btn{background:rgba(128,128,128,0.18);color:var(--primary-text-color,#212121);border-color:rgba(128,128,128,0.4);}
     .btn{min-height:46px;border-radius:18px;border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.08));display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));color:var(--primary-text-color, #f5f8fc);cursor:pointer;font-family:inherit;transition:all 0.18s;}
     .btn:hover:not(:disabled){filter:brightness(1.15);transform:translateY(-1px);}
     .btn:active:not(:disabled){transform:scale(0.93)!important;filter:brightness(0.75)!important;transition:all 0.06s;}
