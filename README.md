@@ -142,6 +142,7 @@ rooms:                                         # optional: filter / reorder room
 | `title` | vacuum name | Custom card title |
 | `title_mode` | `auto` | Set to `custom` to use a custom title |
 | `rooms` | all rooms | List of room names or IDs to show (in order) |
+| `resume_action` | auto | MIoT action `{siid, aiid}` used by Resume. Auto-detected as continue-sweep (`2`/`8`) on OV21GL; other models use `vacuum.start` |
 
 ---
 
@@ -193,6 +194,7 @@ The cleaning lock releases automatically once the vacuum is detected as docked o
 
 ## Changelog
 
+- **v1.3.13** — Resume uses the robot's continue-sweep action (OV21GL) so a paused task keeps its mode, suction and water settings; configurable via `resume_action: {siid, aiid}`
 - **v1.3.12** — Room icons chosen from Spanish/English room names (bed, bathtub, stove, hanger…)
 - **v1.3.11** — Mode / Suction / Water output / Route titles inline with their buttons (stacked on narrow cards)
 - **v1.3.10** — Compact room buttons in two balanced rows, single-line names

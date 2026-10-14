@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.12
+// xiaomi-robot-vacuum-card — v1.3.13
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.12';
+const CARD_VERSION = '1.3.13';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -347,7 +347,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     const taskRunning=vs==='paused'||vs==='error'||(this._cleaningLocked&&this._sensorMode==='live');
     if(!taskRunning&&this._lastStartKind==='rooms'&&this._selectedRooms.length){this.startCleaning();return;}
     if(!taskRunning&&this._lastStartKind==='zones'&&this._selectedZones.length){this.startZoneCleaning();return;}
-    this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';this.render();
+    this._lastAction='resume';this._resume();this._optimisticState='cleaning';this.render();
   }
   _waterCancel(){
     this._waterDismissed=true;
@@ -378,6 +378,18 @@ ${ce?badge(66):''}${df?badge(154):''}
     'Quick':'Quick','Daily':'Standard','Careful':'Deep',
   })[v]||v;}
   _svc(s){this._hass.callService('vacuum',s,{entity_id:this._activeVc||this._E.vc});}
+  // vacuum.start maps to start-sweep on xiaomi_miot, which re-launches the task with the robot's stored settings;
+  // continue-sweep resumes the paused task exactly as it was started. Override with resume_action:{siid,aiid}.
+  _resumeAction(){
+    const ra=this._config.resume_action;if(ra&&ra.siid&&ra.aiid)return ra;
+    const did=this._hass?.entities?.[this._E.vc]?.device_id;const model=String(this._hass?.devices?.[did]?.model||'');
+    return /ov21gl/i.test(model)?{siid:2,aiid:8}:null;
+  }
+  _resume(){
+    const ra=this._resumeAction();
+    if(ra)this._hass.callService('xiaomi_miot','call_action',{entity_id:this._activeVc||this._E.vc,siid:ra.siid,aiid:ra.aiid,params:[]});
+    else this._svc('start');
+  }
   async startCleaning(){
     if(this._selectedRooms.length===0||this._running||this._vacuumState==='cleaning'||this._vacuumState==='returning')return;
     this._running=true;this._lastStartKind='rooms';this._lastStartAt=Date.now();
@@ -734,7 +746,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     this.shadowRoot.querySelectorAll('.opt').forEach(b=>b.addEventListener('click',()=>this._setOpt(b.dataset.type,b.dataset.value)));
     if(_activeTab==='zones')this._setupZoneCanvas();
     const _flash=id=>{const b=this.shadowRoot.querySelector(id);if(b){b.classList.add('btn-confirm');setTimeout(()=>b?.classList.remove('btn-confirm'),400);}};
-    this.shadowRoot.querySelector('#cpa').addEventListener('click',()=>{const p=this._primaryAction();if(p.disabled)return;if(p.act==='start'){_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning();return;}if(p.act==='resume'){this._lastAction='resume';this._svc('start');this._optimisticState='cleaning';}else if(p.act==='pause'){this._lastAction='pause';this._svc('pause');this._optimisticState='paused';}this.render();_flash('#cpa');});
+    this.shadowRoot.querySelector('#cpa').addEventListener('click',()=>{const p=this._primaryAction();if(p.disabled)return;if(p.act==='start'){_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning();return;}if(p.act==='resume'){this._lastAction='resume';this._resume();this._optimisticState='cleaning';}else if(p.act==='pause'){this._lastAction='pause';this._svc('pause');this._optimisticState='paused';}this.render();_flash('#cpa');});
     this.shadowRoot.querySelector('#ch').addEventListener('click',()=>{this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState='returning';this.render();_flash('#ch');setTimeout(()=>{if(this._lastAction==='home'){this._lastAction=null;this.render();}},3000);});
     this.shadowRoot.querySelector('#wcont')?.addEventListener('click',()=>this._waterContinue());
     this.shadowRoot.querySelector('#wcancel')?.addEventListener('click',()=>this._waterCancel());
