@@ -194,6 +194,7 @@ The cleaning lock releases automatically once the vacuum is detected as docked o
 
 ## Changelog
 
+- **v1.3.15** — While a task runs, highlighted rooms come from the robot (`vacuum.current_cleaning_config`), so they survive reloads and tasks started from another device or Mi Home
 - **v1.3.14** — Card stays usable while the robot heads back to charge: Pause stops it in place, selecting rooms/zones offers Start for a new task; Home clears the selection and saved cleaning state; mid-task mop-wash returns stay locked
 - **v1.3.13** — Resume uses the robot's continue-sweep action (OV21GL) so a paused task keeps its mode, suction and water settings; configurable via `resume_action: {siid, aiid}`
 - **v1.3.12** — Room icons chosen from Spanish/English room names (bed, bathtub, stove, hanger…)

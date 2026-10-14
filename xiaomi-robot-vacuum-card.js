@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.14
+// xiaomi-robot-vacuum-card — v1.3.15
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.14';
+const CARD_VERSION = '1.3.15';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -30,7 +30,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({mode:'open'});
-    this._hass=null;this._config={};this._selectedRooms=[];
+    this._hass=null;this._config={};this._selectedRooms=[];this._taskRooms=[];
     this._fanLevel='Turbo';this._waterLevel='Off';this._cleanMode='Vacuuming';this._route='Daily';
     this._running=false;this._rooms=[];this._rendered=false;this._vacuumState='idle';
     this._battery=null;this._optsSynced=false;this._rawStatus='';this._cleaningLocked=false;this._cleaningLockedAt=0;
@@ -116,6 +116,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const nb=vs?.attributes?.battery_level??(bs?parseFloat(bs.state):null);
     const rawStatus=ss&&ss.state&&ss.state!=='unavailable'&&ss.state!=='unknown'?ss.state:'';
     const nvs=vs?vs.state:'unknown';
+    // Rooms of the task in progress as reported by the robot (survives reloads and tasks started elsewhere)
+    let tr=[];try{const cc=JSON.parse(vs?.attributes?.['vacuum.current_cleaning_config']||'{}');if(Array.isArray(cc.rooms))tr=cc.rooms.map(String);}catch(e){}
+    if(tr.join()!==this._taskRooms.join()){this._taskRooms=tr;changed=true;}
     // Load rooms: prefer camera entity (xiaomi_cloud_map_extractor), fallback to vacuum_extend.room_info
     {
       let nr=[];
@@ -306,7 +309,9 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   // Rooms grid: two balanced rows when the card is wide enough for every name on one line, otherwise three rows.
   _roomsGridStyle(){const n=this._rooms.length;if(!n)return'';const two=Math.ceil(n/2),three=Math.max(3,Math.ceil(n/3));const longest=Math.max(...this._rooms.map(r=>(this._customNames[r.id]||r.name).length));const col=Math.max(72,Math.round(longest*6.8+12)),gap=8;const need=two*col+(two-1)*gap;
     return`<style>.rooms{grid-template-columns:repeat(${two},minmax(0,1fr));}.room.wide{grid-column:auto;}@container rooms (max-width:${need}px){.rooms{grid-template-columns:repeat(${three},minmax(0,1fr));}.room.wide{grid-column:span 2;}}</style>`;}
-  _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
+  _taskLocked(){return this._cleaningLocked||this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound());}
+  _shownRooms(){return this._taskLocked()&&this._taskRooms.length?this._taskRooms:this._selectedRooms;}
+  _updR(){const sr=this._shownRooms();this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',sr.includes(b.dataset.id)));}
   _tankIssues(){const a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let fl=[];try{const f=a['vacuum.fault_ids'];const o=typeof f==='string'?JSON.parse(f):(f||{});fl=Array.isArray(o.fault)?o.fault:[];}catch(e){}const waterFault=fl.includes(210030)||a['vacuum.fault']===210030;return{cleanEmpty:(a['vacuum.water_tank_status']>0)||(a['vacuum.host_water_tank_status']>0)||waterFault,dirtyFull:a['vacuum.sewage_tank_status']>0,waterFault};}
   // Heading back to charge with no task in progress (Home pressed or task finished), as opposed to a mid-task mop wash.
   _endTask(){this._cleaningLocked=false;this._selectedRooms=[];this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
@@ -560,8 +565,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     const half=rawName.slice(0,rawName.length/2);
     const dedupedName=rawName===half+' '+half||rawName===half+half?half.trim():rawName;
     const title=this._config.title_mode==='custom'&&this._config.title?this._config.title:dedupedName;
-    const _actuallyCleaning=this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound());
-    const _isCleaning=this._cleaningLocked||_actuallyCleaning;
+    const _isCleaning=this._taskLocked();const _shown=this._shownRooms();
     const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;
     const _activeTab=_camId?this._cleaningModeTab:'rooms';
     const _om={
@@ -726,7 +730,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     ${t==='rooms'?'<div class="pills"><button class="pill" id="ab">All</button><button class="pill" id="nb">Clear</button></div>':''}
     </div>
     ${t==='rooms'
-      ?(this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`${this._roomsGridStyle()}<div class="rooms-wrap"><div class="rooms">${this._rooms.map(r=>`<div class="room${this._selectedRooms.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div></div>`)
+      ?(this._rooms.length===0?`<div class="nr">Loading rooms...</div>`:`${this._roomsGridStyle()}<div class="rooms-wrap"><div class="rooms">${this._rooms.map(r=>`<div class="room${_shown.includes(r.id)?' active':''}${(this._customNames[r.id]||r.name).length>9?' wide':''}" role="button" data-id="${r.id}"><button class="edit-icon" data-id="${r.id}">${this._svg('pen',13,'currentColor')}</button><div class="ibox">${this._roomIconHtml(r)}</div><div class="rname">${this._customNames[r.id]||r.name}</div></div>`).join('')}</div></div>`)
       :(_camId?(()=>{const _ep=this._hass.states[_camId]?.attributes?.entity_picture||'/api/camera_proxy/'+_camId;const _ctl=`<div class="zone-controls"><button class="zone-ctrl-btn zc-fit" id="zcenter" title="Fit to view"><ha-icon icon="mdi:crop-free"></ha-icon></button><button class="zone-ctrl-btn" id="zzout" title="Zoom out"><ha-icon icon="mdi:magnify-minus-outline"></ha-icon></button><button class="zone-ctrl-btn" id="zzin" title="Zoom in"><ha-icon icon="mdi:magnify-plus-outline"></ha-icon></button></div>`;return`<div class="zone-map-container"><div id="zone-inner" class="zone-map-inner" style="transform:translate(${this._mapPan.x}px,${this._mapPan.y}px) scale(${this._mapZoom});"><img id="zone-img" src="${_ep}" /><canvas id="zone-canvas"></canvas></div>${_ctl}</div><div class="zone-list">${this._selectedZones.length===0?'<div class="nr" style="padding:8px 0;font-size:12px;">Draw a rectangle on the map to add a zone</div>':this._selectedZones.map((z,i)=>`<div class="zone-item"><span>Zone ${i+1}</span><button class="zone-del" data-id="${z.id}">×</button></div>`).join('')}</div>`;})():'<div class="nr">No map entity configured</div>')
     }
     </div>`;})()}
