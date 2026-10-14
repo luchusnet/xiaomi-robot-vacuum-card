@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.13
+// xiaomi-robot-vacuum-card — v1.3.14
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.13';
+const CARD_VERSION = '1.3.14';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -308,15 +308,22 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     return`<style>.rooms{grid-template-columns:repeat(${two},minmax(0,1fr));}.room.wide{grid-column:auto;}@container rooms (max-width:${need}px){.rooms{grid-template-columns:repeat(${three},minmax(0,1fr));}.room.wide{grid-column:span 2;}}</style>`;}
   _updR(){this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',this._selectedRooms.includes(b.dataset.id)));}
   _tankIssues(){const a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let fl=[];try{const f=a['vacuum.fault_ids'];const o=typeof f==='string'?JSON.parse(f):(f||{});fl=Array.isArray(o.fault)?o.fault:[];}catch(e){}const waterFault=fl.includes(210030)||a['vacuum.fault']===210030;return{cleanEmpty:(a['vacuum.water_tank_status']>0)||(a['vacuum.host_water_tank_status']>0)||waterFault,dirtyFull:a['vacuum.sewage_tank_status']>0,waterFault};}
+  // Heading back to charge with no task in progress (Home pressed or task finished), as opposed to a mid-task mop wash.
+  _endTask(){this._cleaningLocked=false;this._selectedRooms=[];this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
+  _homeBound(){return this._vacuumState==='returning'&&!this._cleaningLocked&&!['gowash','washbreak','multitaskstationworking','multitaskrecharge'].includes(this._rawStatus);}
   _primaryAction(){
     const vs=this._vacuumState;
     const camId=this._config.camera_entity||this._config.map_source?.camera_entity;
     const tab=camId?this._cleaningModeTab:'rooms';
     const none=tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
     if(this._running)return{act:'busy',cls:'start-btn',icon:null,label:'Starting...',disabled:true};
-    if(vs==='paused'||vs==='error')return{act:'resume',cls:'resume-btn',icon:'mdi:play',label:'Resume',disabled:false};
-    if(vs==='cleaning'||this._cleaningLocked)return{act:'pause',cls:'pause-btn',icon:'mdi:pause',label:'Pause',disabled:false};
-    return{act:'start',cls:'start-btn',icon:'mdi:play',label:'Start',disabled:none||vs==='returning'};
+    const start={act:'start',cls:'start-btn',icon:'mdi:play',label:'Start',disabled:none};
+    const pause={act:'pause',cls:'pause-btn',icon:'mdi:pause',label:'Pause',disabled:false};
+    // With no task of ours running, a new selection always offers Start (the robot drops what it was doing).
+    if(vs==='paused'||vs==='error')return!this._cleaningLocked&&!none?start:{act:'resume',cls:'resume-btn',icon:'mdi:play',label:'Resume',disabled:false};
+    if(this._homeBound())return none?pause:start;
+    if(vs==='cleaning'||vs==='returning'||this._cleaningLocked)return pause;
+    return start;
   }
   _primaryHtml(p){return p.icon?`<ha-icon class="ctrl-icon" icon="${p.icon}"></ha-icon>&nbsp;${p.label}`:`<span class="spin">${this._svg('spn',24,'currentColor')}</span>&nbsp;${p.label}`;}
   _tankSvg(ce,df){const bad='#ff5050';const badge=x=>`<g><circle cx="${x}" cy="68" r="15" fill="${bad}"/><text x="${x}" y="74" text-anchor="middle" font-size="18" font-weight="700" fill="#fff">!</text></g>`;return`<svg class="tank-svg" viewBox="0 0 220 150" xmlns="http://www.w3.org/2000/svg">
@@ -351,7 +358,7 @@ ${ce?badge(66):''}${df?badge(154):''}
   }
   _waterCancel(){
     this._waterDismissed=true;
-    this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState=null;this.render();
+    this._lastAction='home';this._svc('return_to_base');this._endTask();this._sensorMode='unknown';this._optimisticState=null;this.render();
   }
   _updS(){const b=this.shadowRoot.querySelector('#cpa');if(!b||this._running)return;const p=this._primaryAction();b.disabled=p.disabled;b.className=`btn primary-btn ${p.cls}`;b.innerHTML=this._primaryHtml(p);}
   _setOpt(type,value){
@@ -391,7 +398,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     else this._svc('start');
   }
   async startCleaning(){
-    if(this._selectedRooms.length===0||this._running||this._vacuumState==='cleaning'||this._vacuumState==='returning')return;
+    if(this._selectedRooms.length===0||this._running||this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound()))return;
     this._running=true;this._lastStartKind='rooms';this._lastStartAt=Date.now();
     const E=this._E;
     const avc=this._activeVc||E.vc;
@@ -445,7 +452,7 @@ ${ce?badge(66):''}${df?badge(154):''}
   }
   _mapPxToVac(px,py,T){return{x:Math.round(T.a*px+T.b*py+T.c),y:Math.round(T.d*px+T.e*py+T.f)};}
   async startZoneCleaning(){
-    if(this._selectedZones.length===0||this._running||this._vacuumState==='cleaning'||this._vacuumState==='returning')return;
+    if(this._selectedZones.length===0||this._running||this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound()))return;
     this._running=true;this._lastStartKind='zones';this._lastStartAt=Date.now();
     const E=this._E;const avc=this._activeVc||E.vc;
     const btn=this.shadowRoot.querySelector('#cpa');
@@ -553,7 +560,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     const half=rawName.slice(0,rawName.length/2);
     const dedupedName=rawName===half+' '+half||rawName===half+half?half.trim():rawName;
     const title=this._config.title_mode==='custom'&&this._config.title?this._config.title:dedupedName;
-    const _actuallyCleaning=this._vacuumState==='cleaning'||this._vacuumState==='returning';
+    const _actuallyCleaning=this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound());
     const _isCleaning=this._cleaningLocked||_actuallyCleaning;
     const _camId=this._config.camera_entity||this._config.map_source?.camera_entity;
     const _activeTab=_camId?this._cleaningModeTab:'rooms';
@@ -729,7 +736,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     ${this._E.route?this._optSec('route','Route',rOpts,_isCleaning):''}
     <div class="actions">
     ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:water",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
-    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _id=_vs==='idle'&&!_atBase;const canHome=_vs==='cleaning'||_lk||_vs==='paused'||_id||_vs==='error';const _p=this._primaryAction();return`<div class="actions-row">
+    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _id=_vs==='idle'&&!_atBase;const canHome=_vs==='cleaning'||_lk||_vs==='paused'||_id||_vs==='error'||(_vs==='returning'&&!this._homeBound());const _p=this._primaryAction();return`<div class="actions-row">
     <button class="btn primary-btn ${_p.cls}${this._lastAction===_p.act?' btn-last':''}"${_p.disabled?' disabled':''} id="cpa">${this._primaryHtml(_p)}</button>
     <button class="btn primary-btn home-btn${this._lastAction==='home'?' btn-last':''}"${canHome?'':' disabled'} id="ch" title="Return home"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon>&nbsp;Home</button>
     </div>`;})()}
@@ -747,7 +754,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     if(_activeTab==='zones')this._setupZoneCanvas();
     const _flash=id=>{const b=this.shadowRoot.querySelector(id);if(b){b.classList.add('btn-confirm');setTimeout(()=>b?.classList.remove('btn-confirm'),400);}};
     this.shadowRoot.querySelector('#cpa').addEventListener('click',()=>{const p=this._primaryAction();if(p.disabled)return;if(p.act==='start'){_activeTab==='rooms'?this.startCleaning():this.startZoneCleaning();return;}if(p.act==='resume'){this._lastAction='resume';this._resume();this._optimisticState='cleaning';}else if(p.act==='pause'){this._lastAction='pause';this._svc('pause');this._optimisticState='paused';}this.render();_flash('#cpa');});
-    this.shadowRoot.querySelector('#ch').addEventListener('click',()=>{this._lastAction='home';this._svc('return_to_base');this._cleaningLocked=false;this._sensorMode='unknown';this._optimisticState='returning';this.render();_flash('#ch');setTimeout(()=>{if(this._lastAction==='home'){this._lastAction=null;this.render();}},3000);});
+    this.shadowRoot.querySelector('#ch').addEventListener('click',()=>{this._lastAction='home';this._svc('return_to_base');this._endTask();this._sensorMode='unknown';this._optimisticState='returning';this.render();_flash('#ch');setTimeout(()=>{if(this._lastAction==='home'){this._lastAction=null;this.render();}},3000);});
     this.shadowRoot.querySelector('#wcont')?.addEventListener('click',()=>this._waterContinue());
     this.shadowRoot.querySelector('#wcancel')?.addEventListener('click',()=>this._waterCancel());
   }
