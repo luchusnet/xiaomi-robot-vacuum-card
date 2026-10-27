@@ -194,6 +194,7 @@ The cleaning lock releases automatically once the vacuum is detected as docked o
 
 ## Changelog
 
+- **v1.3.17** — Water-tank dialog: Continue waits for the robot's response (retries once), shows progress until the robot actually resumes, and reports an error with Try again if the command is rejected or the robot stays paused
 - **v1.3.16** — Water-tank dialog uses an opaque background (readable on glass themes that make `--ha-card-background` transparent); darker backdrop and a neutral Cancel button
 - **v1.3.15** — While a task runs, highlighted rooms come from the robot (`vacuum.current_cleaning_config`), so they survive reloads and tasks started from another device or Mi Home
 - **v1.3.14** — Card stays usable while the robot heads back to charge: Pause stops it in place, selecting rooms/zones offers Start for a new task; Home clears the selection and saved cleaning state; mid-task mop-wash returns stay locked

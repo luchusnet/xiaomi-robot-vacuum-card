@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.16
+// xiaomi-robot-vacuum-card — v1.3.17
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.16';
+const CARD_VERSION = '1.3.17';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -35,7 +35,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     this._running=false;this._rooms=[];this._rendered=false;this._vacuumState='idle';
     this._battery=null;this._optsSynced=false;this._rawStatus='';this._cleaningLocked=false;this._cleaningLockedAt=0;
     this._modeOpts=null;this._fanOpts=null;this._waterOpts=null;this._routeOpts=null;this._activeVc='';
-    this._optimisticState=null;this._lastAction=null;this._waterSnoozeUntil=0;this._waterDismissed=false;this._lastStartKind=null;this._lastStartAt=0;
+    this._optimisticState=null;this._lastAction=null;this._waterSnoozeUntil=0;this._wFlow=null;this._waterDismissed=false;this._lastStartKind=null;this._lastStartAt=0;
     this._sensorMode='unknown';this._detectionStartedAt=0;this._staleDetectedAt=0;
     this._cleaningModeTab='rooms';this._selectedZones=[];this._zoneDrawing=null;this._mapZoom=1;this._mapPan={x:0,y:0};
     this._customIcons={};this._customNames={};this._iconsLoaded=false;
@@ -343,26 +343,39 @@ ${ce?badge(66):''}${df?badge(154):''}
 </svg>`;}
   _waterModalHtml(){
     const{cleanEmpty:ce,dirtyFull:df,waterFault}=this._tankIssues();
-    if(!ce&&!df){this._waterDismissed=false;return '';}
+    if(!ce&&!df){this._waterDismissed=false;this._wFlow=null;return '';}
+    const wf=this._wFlow;
+    // The robot left the paused state: give its fault flags a couple of polls to clear before showing the dialog again
+    if(wf?.stage==='waiting'&&!['paused','error'].includes(this._vacuumState)){this._wFlow=null;this._waterSnoozeUntil=Date.now()+180000;setTimeout(()=>this.render(),180500);return '';}
     const vs=this._vacuumState;
     const ctx=waterFault||this._cleaningLocked||['paused','error','cleaning','returning'].includes(vs)||(Date.now()-this._lastStartAt<15*60*1000);
     if(!ctx||this._waterDismissed||Date.now()<this._waterSnoozeUntil)return '';
     const title=ce&&df?'Water tanks need attention':ce?'Clean water tank is empty':'Dirty water tank is full';
-    const msg=ce&&df?'Refill the clean water tank and empty the dirty water tank, then tap Continue.':ce?'Refill the clean water tank in the base station, then tap Continue.':'Empty the dirty water tank in the base station, then tap Continue.';
-    return`<div class="water-modal"><div class="water-box">${this._tankSvg(ce,df)}<div class="water-title">${title}</div><div class="water-msg">${msg}</div><div class="water-btns"><button class="btn primary-btn cancel-btn" id="wcancel">Cancel</button><button class="btn primary-btn start-btn" id="wcont">Continue</button></div></div></div>`;
+    let msg=ce&&df?'Refill the clean water tank and empty the dirty water tank, then tap Continue.':ce?'Refill the clean water tank in the base station, then tap Continue.':'Empty the dirty water tank in the base station, then tap Continue.';
+    let busy=false,cont='Continue';
+    if(wf?.stage==='sending'){msg='Sending Continue to the robot…';busy=true;}
+    else if(wf?.stage==='waiting'){msg='Command received. Waiting for the robot to check the tank and resume…';busy=true;}
+    else if(wf?.stage==='failed'){msg=wf.msg;cont='Try again';}
+    return`<div class="water-modal"><div class="water-box">${this._tankSvg(ce,df)}<div class="water-title">${title}</div><div class="water-msg${wf?.stage==='failed'?' warn':''}">${busy?`<span class="spin">${this._svg('spn',14,'currentColor')}</span> `:''}${msg}</div><div class="water-btns"><button class="btn primary-btn cancel-btn" id="wcancel">Cancel</button><button class="btn primary-btn start-btn" id="wcont"${busy?' disabled':''}>${cont}</button></div></div></div>`;
   }
-  _waterContinue(){
-    this._waterSnoozeUntil=Date.now()+30000;
-    setTimeout(()=>this.render(),30500);
-    this.render();
+  async _waterContinue(){
     const vs=this._vacuumState;
     const taskRunning=vs==='paused'||vs==='error'||(this._cleaningLocked&&this._sensorMode==='live');
-    if(!taskRunning&&this._lastStartKind==='rooms'&&this._selectedRooms.length){this.startCleaning();return;}
-    if(!taskRunning&&this._lastStartKind==='zones'&&this._selectedZones.length){this.startZoneCleaning();return;}
-    this._lastAction='resume';this._resume();this._optimisticState='cleaning';this.render();
+    if(!taskRunning&&(this._lastStartKind==='rooms'&&this._selectedRooms.length||this._lastStartKind==='zones'&&this._selectedZones.length)){
+      this._waterSnoozeUntil=Date.now()+30000;setTimeout(()=>this.render(),30500);this.render();
+      this._lastStartKind==='rooms'?this.startCleaning():this.startZoneCleaning();return;
+    }
+    // Paused task (e.g. the base stopped for lack of water): resume it and follow up until the robot actually moves on
+    this._wFlow={stage:'sending'};this.render();
+    let r=await this._resume();
+    if(!r.ok){await new Promise(x=>setTimeout(x,2500));r=await this._resume();}
+    if(!r.ok){this._wFlow={stage:'failed',msg:`The robot didn't accept the command${r.code!=null?` (code ${r.code})`:''}${r.error?`: ${r.error}`:''}. Check that it's online and try again.`};this.render();return;}
+    this._lastAction='resume';
+    const flow=this._wFlow={stage:'waiting'};this.render();
+    setTimeout(()=>{if(this._wFlow===flow){this._wFlow={stage:'failed',msg:'The robot is still paused and still reports a tank problem. Make sure the tank is full and pushed all the way in, then try again.'};this.render();}},150000);
   }
   _waterCancel(){
-    this._waterDismissed=true;
+    this._waterDismissed=true;this._wFlow=null;
     this._lastAction='home';this._svc('return_to_base');this._endTask();this._sensorMode='unknown';this._optimisticState=null;this.render();
   }
   _updS(){const b=this.shadowRoot.querySelector('#cpa');if(!b||this._running)return;const p=this._primaryAction();b.disabled=p.disabled;b.className=`btn primary-btn ${p.cls}`;b.innerHTML=this._primaryHtml(p);}
@@ -397,10 +410,15 @@ ${ce?badge(66):''}${df?badge(154):''}
     const did=this._hass?.entities?.[this._E.vc]?.device_id;const model=String(this._hass?.devices?.[did]?.model||'');
     return /ov21gl/i.test(model)?{siid:2,aiid:8}:null;
   }
-  _resume(){
+  // Resolves to {ok, code, error}; xiaomi_miot reports code 0/1 on success, negative codes when the robot rejects or is unreachable.
+  async _resume(){
     const ra=this._resumeAction();
-    if(ra)this._hass.callService('xiaomi_miot','call_action',{entity_id:this._activeVc||this._E.vc,siid:ra.siid,aiid:ra.aiid,params:[]});
-    else this._svc('start');
+    if(!ra){this._svc('start');return{ok:true};}
+    try{
+      const r=await this._hass.callService('xiaomi_miot','call_action',{entity_id:this._activeVc||this._E.vc,siid:ra.siid,aiid:ra.aiid,params:[]},undefined,false,true);
+      const res=r?.response||{};
+      return{ok:res.code===0||res.code===1,code:res.code,error:res.error};
+    }catch(e){return{ok:false,error:e?.message||String(e)};}
   }
   async startCleaning(){
     if(this._selectedRooms.length===0||this._running||this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound()))return;
@@ -684,6 +702,8 @@ ${ce?badge(66):''}${df?badge(154):''}
     .tank-svg{width:100%;max-width:240px;height:auto;display:block;margin:0 auto 8px;color:var(--secondary-text-color,#6f7d8d);}
     .water-title{font-size:16px;font-weight:700;margin-bottom:6px;}
     .water-msg{font-size:13px;color:var(--secondary-text-color,#6f7d8d);margin-bottom:14px;line-height:1.35;}
+.water-msg.warn{color:var(--error-color,#db4437);}
+.water-msg .spin{display:inline-flex;vertical-align:-2px;}
     .water-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
     .water-btns .cancel-btn{background:rgba(128,128,128,0.18);color:var(--primary-text-color,#212121);border-color:rgba(128,128,128,0.4);}
     .btn{min-height:46px;border-radius:18px;border:1px solid var(--ha-chip-border-color, rgba(0,0,0,0.08));display:grid;place-items:center;background:var(--ha-chip-background, rgba(0,0,0,0.04));color:var(--primary-text-color, #f5f8fc);cursor:pointer;font-family:inherit;transition:all 0.18s;}
