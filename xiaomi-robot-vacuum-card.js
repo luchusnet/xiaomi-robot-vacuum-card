@@ -1,6 +1,6 @@
-// xiaomi-robot-vacuum-card — v1.3.17
+// xiaomi-robot-vacuum-card — v1.3.18
 // MIT License — https://github.com/tojolab/xiaomi-robot-vacuum-card
-const CARD_VERSION = '1.3.17';
+const CARD_VERSION = '1.3.18';
 const MAX_ZONES = 3;
 
 class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
@@ -30,7 +30,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({mode:'open'});
-    this._hass=null;this._config={};this._selectedRooms=[];this._taskRooms=[];
+    this._hass=null;this._config={};this._selectedRooms=[];this._taskRooms=[];this._breakCharging=false;
     this._fanLevel='Turbo';this._waterLevel='Off';this._cleanMode='Vacuuming';this._route='Daily';
     this._running=false;this._rooms=[];this._rendered=false;this._vacuumState='idle';
     this._battery=null;this._optsSynced=false;this._rawStatus='';this._cleaningLocked=false;this._cleaningLockedAt=0;
@@ -116,6 +116,8 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const nb=vs?.attributes?.battery_level??(bs?parseFloat(bs.state):null);
     const rawStatus=ss&&ss.state&&ss.state!=='unavailable'&&ss.state!=='unknown'?ss.state:'';
     const nvs=vs?vs.state:'unknown';
+    const bc=vs?.attributes?.['vacuum.status']===3||/breakcharg/i.test(vs?.attributes?.['vacuum.status_desc']||'');
+    if(bc!==this._breakCharging){this._breakCharging=bc;changed=true;}
     // Rooms of the task in progress as reported by the robot (survives reloads and tasks started elsewhere)
     let tr=[];try{const cc=JSON.parse(vs?.attributes?.['vacuum.current_cleaning_config']||'{}');if(Array.isArray(cc.rooms))tr=cc.rooms.map(String);}catch(e){}
     if(tr.join()!==this._taskRooms.join()){this._taskRooms=tr;changed=true;}
@@ -161,7 +163,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
         if(doneStatuses.has(rawStatus)||(nvs==='docked'&&!stationWorkingStatuses.has(rawStatus))){this._cleaningLocked=false;}
         else if(Date.now()-this._staleDetectedAt>30*60*1000){this._cleaningLocked=false;}
       }
-      if(elapsed>90*60*1000){this._cleaningLocked=false;}
+      if(elapsed>90*60*1000&&!this._breakCharging&&!['cleaning','paused','returning','error'].includes(nvs)){this._cleaningLocked=false;}
     }
     if(wasLocked&&!this._cleaningLocked){this._lastAction=null;this._selectedRooms=[];if(this._sensorMode==='live')this._selectedZones=[];this._hass.callWS({type:'frontend/set_user_data',key:'xiaomi-robot-vacuum-card-cleaning-state',value:null});}
     if(nvs!==this._vacuumState){this._vacuumState=nvs;this._optimisticState=null;changed=true;}
@@ -230,6 +232,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   _capitalize(s){return s.replace(/\b\w/g,c=>c.toUpperCase());}
   _stateLabel(){
     const vs=this._optimisticState||this._vacuumState;
+    if(this._breakCharging)return'Recharging to resume';
     if(this._cleaningLocked&&vs==='paused')return'Paused';
     const stationLabels={'multitaskstationworking':'Station working','stationworking':'Station working','multitaskrecharge':'Returning to charge','washbreak':'Washing mop','gowash':'Going to wash'};
     if(this._cleaningLocked&&stationLabels[this._rawStatus])return stationLabels[this._rawStatus];
@@ -242,6 +245,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   }
   _stateColor(){
     const vs=this._optimisticState||this._vacuumState;
+    if(this._breakCharging)return'#43d17c';
     const sensorColorMap={
       sweeping:'#43d17c',mapping:'#43d17c','go charging':'#ffb648',charging:'#18bcf2',charged:'#18bcf2',paused:'#ffb648',idle:'#18bcf2',
       working:'#43d17c',returning:'#ffb648',pausing:'#ffb648',standby:'#18bcf2','fully charged':'#18bcf2',
@@ -309,7 +313,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
   // Rooms grid: two balanced rows when the card is wide enough for every name on one line, otherwise three rows.
   _roomsGridStyle(){const n=this._rooms.length;if(!n)return'';const two=Math.ceil(n/2),three=Math.max(3,Math.ceil(n/3));const longest=Math.max(...this._rooms.map(r=>(this._customNames[r.id]||r.name).length));const col=Math.max(72,Math.round(longest*6.8+12)),gap=8;const need=two*col+(two-1)*gap;
     return`<style>.rooms{grid-template-columns:repeat(${two},minmax(0,1fr));}.room.wide{grid-column:auto;}@container rooms (max-width:${need}px){.rooms{grid-template-columns:repeat(${three},minmax(0,1fr));}.room.wide{grid-column:span 2;}}</style>`;}
-  _taskLocked(){return this._cleaningLocked||this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound());}
+  _taskLocked(){return this._cleaningLocked||this._breakCharging||this._vacuumState==='cleaning'||(this._vacuumState==='returning'&&!this._homeBound());}
   _shownRooms(){return this._taskLocked()&&this._taskRooms.length?this._taskRooms:this._selectedRooms;}
   _updR(){const sr=this._shownRooms();this.shadowRoot.querySelectorAll('.room').forEach(b=>b.classList.toggle('active',sr.includes(b.dataset.id)));}
   _tankIssues(){const a=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};let fl=[];try{const f=a['vacuum.fault_ids'];const o=typeof f==='string'?JSON.parse(f):(f||{});fl=Array.isArray(o.fault)?o.fault:[];}catch(e){}const waterFault=fl.includes(210030)||a['vacuum.fault']===210030;return{cleanEmpty:(a['vacuum.water_tank_status']>0)||(a['vacuum.host_water_tank_status']>0)||waterFault,dirtyFull:a['vacuum.sewage_tank_status']>0,waterFault};}
@@ -322,6 +326,7 @@ class XiaomiS20PlusVacuumCardV3 extends HTMLElement {
     const tab=camId?this._cleaningModeTab:'rooms';
     const none=tab==='rooms'?this._selectedRooms.length===0:this._selectedZones.length===0;
     if(this._running)return{act:'busy',cls:'start-btn',icon:null,label:'Starting...',disabled:true};
+    if(this._breakCharging)return{act:'none',cls:'resume-btn',icon:'mdi:battery-charging',label:'Recharging to resume',disabled:true};
     const start={act:'start',cls:'start-btn',icon:'mdi:play',label:'Start',disabled:none};
     const pause={act:'pause',cls:'pause-btn',icon:'mdi:pause',label:'Pause',disabled:false};
     // With no task of ours running, a new selection always offers Start (the robot drops what it was doing).
@@ -760,7 +765,7 @@ ${ce?badge(66):''}${df?badge(154):''}
     ${this._E.route?this._optSec('route','Route',rOpts,_isCleaning):''}
     <div class="actions">
     ${(()=>{const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _cons=[{icon:"mdi:delete-variant",label:"Dust bag",pct:_va["dust_bag.dust_bag_life_level"]},{icon:"mdi:brush",label:"Main brush",pct:_va["brush_cleaner.brush_life_level"]},{icon:"mdi:brush",label:"Side brush",pct:_va["brush_life_level-13-1"]},{icon:"mdi:air-filter",label:"Filter",pct:_va["filter.filter_life_level"]},{icon:"mdi:water",label:"Mop",pct:_va["mop.mop_life_level"]},].filter(c=>c.pct!=null);if(!_cons.length)return '';const _cc=p=>p<20?'#ff5050':p<50?'#ffb648':'var(--secondary-text-color,#6f7d8d)';return '<div class="consumables">'+_cons.map(c=>{const col=_cc(c.pct);return `<div class="cons-chip" style="color:${col};border-color:${col}40;background:${col}12;"><ha-icon icon="${c.icon}" style="--mdc-icon-size:14px;width:14px;height:14px;display:flex;"></ha-icon>${c.label} ${c.pct}%</div>`;}).join('')+ '</div>';})()}
-    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _id=_vs==='idle'&&!_atBase;const canHome=_vs==='cleaning'||_lk||_vs==='paused'||_id||_vs==='error'||(_vs==='returning'&&!this._homeBound());const _p=this._primaryAction();return`<div class="actions-row">
+    ${(()=>{const _vs=this._vacuumState;const _lk=this._cleaningLocked;const _va=this._hass?.states[this._activeVc||this._E.vc]?.attributes||{};const _atBase=_vs==='docked'||(_vs==='idle'&&(_va['battery.charging_state']===1||/charg/i.test(_va['vacuum.status_desc']||'')));const _id=_vs==='idle'&&!_atBase;const canHome=this._breakCharging||_vs==='cleaning'||_lk||_vs==='paused'||_id||_vs==='error'||(_vs==='returning'&&!this._homeBound());const _p=this._primaryAction();return`<div class="actions-row">
     <button class="btn primary-btn ${_p.cls}${this._lastAction===_p.act?' btn-last':''}"${_p.disabled?' disabled':''} id="cpa">${this._primaryHtml(_p)}</button>
     <button class="btn primary-btn home-btn${this._lastAction==='home'?' btn-last':''}"${canHome?'':' disabled'} id="ch" title="Return home"><ha-icon class="ctrl-icon" icon="mdi:home"></ha-icon>&nbsp;Home</button>
     </div>`;})()}

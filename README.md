@@ -194,6 +194,7 @@ The cleaning lock releases automatically once the vacuum is detected as docked o
 
 ## Changelog
 
+- **v1.3.18** — Mid-task recharge (BreakCharging) is shown as "Recharging to resume" with the task rooms locked and Home available; the 90-minute lock fallback no longer releases while the robot still reports an active task
 - **v1.3.17** — Water-tank dialog: Continue waits for the robot's response (retries once), shows progress until the robot actually resumes, and reports an error with Try again if the command is rejected or the robot stays paused
 - **v1.3.16** — Water-tank dialog uses an opaque background (readable on glass themes that make `--ha-card-background` transparent); darker backdrop and a neutral Cancel button
 - **v1.3.15** — While a task runs, highlighted rooms come from the robot (`vacuum.current_cleaning_config`), so they survive reloads and tasks started from another device or Mi Home
